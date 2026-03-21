@@ -1,0 +1,17 @@
+{
+  "name": "collectigo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "backend": "pnpm --filter backend dev",
+    "mobile": "pnpm --filter mobile start",
+    "lint": "pnpm -r lint",
+    "build": "pnpm -r build"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0"
+  }
+}
