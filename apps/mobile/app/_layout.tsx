@@ -1,4 +1,4 @@
-import './global.css';
+import '../global.css';
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
