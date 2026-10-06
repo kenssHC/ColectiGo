@@ -17,10 +17,13 @@ export const databaseConfig = registerAs('database', () => ({
 export const plannerConfig = registerAs('planner', () => ({
   // Servidor OSRM con perfil peatonal (datos OpenStreetMap, cortesía de FOSSGIS).
   // Deja la variable vacía (WALK_ROUTING_URL=) para desactivar el ruteo por calles.
-  walkRoutingUrl: process.env.WALK_ROUTING_URL ?? 'https://routing.openstreetmap.de/routed-foot',
-  // API key de Google (Routes API habilitada) para duración con tráfico real.
-  // Sin key, se estima con velocidad promedio ajustada por hora punta.
-  googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY ?? '',
+  walkRoutingUrl:
+    process.env.WALK_ROUTING_URL ??
+    'https://routing.openstreetmap.de/routed-foot',
+  // Key exclusiva del backend para Routes API. El nombre anterior queda como
+  // compatibilidad temporal, pero no conviene reutilizar la key del SDK Android.
+  googleRoutesApiKey:
+    process.env.GOOGLE_ROUTES_API_KEY ?? process.env.GOOGLE_MAPS_API_KEY ?? '',
 }));
 
 export const firebaseConfig = registerAs('firebase', () => ({

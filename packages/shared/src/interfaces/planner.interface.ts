@@ -5,6 +5,9 @@ export interface LatLng {
   lng: number;
 }
 
+/** Procedencia del tiempo vehicular usado por el planificador. */
+export type VehicleTimeSource = 'GOOGLE_TRAFFIC' | 'GOOGLE_STATIC' | 'LOCAL_ESTIMATE';
+
 export interface RouteStep {
   type: RouteStepType;
   instruction: string;
@@ -20,6 +23,12 @@ export interface RouteStep {
   to?: LatLng;
   /** Coordenadas del recorrido (paradas intermedias incluidas), para dibujar en el mapa. */
   path?: LatLng[];
+  /** Procedencia del tiempo del tramo vehicular; solo aplica a pasos ride. */
+  timeSource?: VehicleTimeSource;
+  /** Momento en que se calculó la estimación de Google. */
+  trafficTimestamp?: string;
+  /** Duración comparable sin tráfico actual, si Google la proporcionó. */
+  durationWithoutTraffic?: number;
 }
 
 /** Distintivos que explican en qué destaca una opción de viaje. */

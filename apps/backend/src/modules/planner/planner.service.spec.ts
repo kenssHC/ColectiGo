@@ -1,5 +1,5 @@
 import { PlannerService } from './planner.service';
-import { TrafficService } from './traffic.service';
+import { TrafficService, type RideDurationEstimate } from './traffic.service';
 import type { RoutesService } from '../routes/routes.service';
 import type { WalkPath, WalkRoutingService } from './walk-routing.service';
 import type { RouteEntity } from '../routes/entities/route.entity';
@@ -55,6 +55,10 @@ interface ServiceMocks {
   walkPath?: WalkPath | null;
   walkPathResolver?: (from: LatLng, to: LatLng) => WalkPath | null;
   rideSeconds?: number | null;
+  rideEstimateResolver?: (
+    path: LatLng[],
+    rideDistance: number,
+  ) => RideDurationEstimate;
 }
 
 describe('PlannerService', () => {
@@ -103,10 +107,23 @@ describe('PlannerService', () => {
         ),
     } as unknown as WalkRoutingService;
     const traffic = {
-      getRideDurationSeconds: jest
+      getTrafficAwareDuration: jest
         .fn()
-        .mockResolvedValue(mocks.rideSeconds ?? null),
-      getSpeedFactor: jest.fn().mockReturnValue(1),
+        .mockImplementation((path: LatLng[], rideDistance: number) => {
+          const estimate = mocks.rideEstimateResolver
+            ? mocks.rideEstimateResolver(path, rideDistance)
+            : {
+                durationSeconds:
+                  mocks.rideSeconds ??
+                  Math.max(1, Math.round(rideDistance / 5)),
+                source:
+                  mocks.rideSeconds === null || mocks.rideSeconds === undefined
+                    ? ('LOCAL_ESTIMATE' as const)
+                    : ('GOOGLE_TRAFFIC' as const),
+                fetchedAt: '2026-10-06T12:00:00.000Z',
+              };
+          return Promise.resolve(estimate);
+        }),
     } as unknown as TrafficService;
     return new PlannerService(routesService, walkRouting, traffic);
   }
@@ -273,6 +290,32 @@ describe('PlannerService', () => {
 
     const rideStep = transit!.steps.find((s) => s.type === 'ride');
     expect(rideStep?.duration).toBe(900);
+    expect(rideStep?.timeSource).toBe('GOOGLE_TRAFFIC');
+    expect(rideStep?.trafficTimestamp).toBe('2026-10-06T12:00:00.000Z');
+  });
+
+  it('reordena las rutas cuando el tráfico cambia sus tiempos vehiculares', async () => {
+    const service = buildService([expressRoute, cheapRoute], {
+      rideEstimateResolver: (path) => {
+        const isExpress = path.some((point) => point.lng > 0.001);
+        return {
+          durationSeconds: isExpress ? 2_400 : 300,
+          source: 'GOOGLE_TRAFFIC',
+          fetchedAt: '2026-10-06T12:00:00.000Z',
+        };
+      },
+    });
+
+    const response = await service.calculate(origin, destination, 'fastest');
+    const options = allOptions(response);
+    const cheap = options.find((option) => option.totalFare === 1);
+    const express = options.find((option) => option.totalFare === 2.5);
+
+    expect(cheap).toBeDefined();
+    expect(express).toBeDefined();
+    expect(cheap!.totalDuration).toBeLessThan(express!.totalDuration);
+    expect(response.best.routeName).toBe('TA-11');
+    expect(response.best.badges).toContain('fastest');
   });
 
   it('enriquece las caminatas con el trazado por calles cuando está disponible', async () => {

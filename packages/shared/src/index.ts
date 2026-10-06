@@ -10,6 +10,7 @@ export type {
 export type {
   LatLng,
   RouteStep,
+  VehicleTimeSource,
   PlannerBadge,
   PlannerMetrics,
   PlannerResult,

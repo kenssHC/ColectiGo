@@ -52,6 +52,7 @@ cp apps/backend/.env.example apps/backend/.env
 | `FIREBASE_CLIENT_EMAIL` | Client email del service account                                |
 | `FIREBASE_PRIVATE_KEY`  | Private key del service account (con `\n` escapados)            |
 | `CORS_ORIGINS`          | Orígenes permitidos separados por coma (`*` solo en desarrollo) |
+| `GOOGLE_ROUTES_API_KEY` | Key server-side de Routes API para calcular tiempos con tráfico |
 
 El backend valida las credenciales de Firebase al arrancar.
 
@@ -100,6 +101,8 @@ GOOGLE_MAPS_API_KEY=tu_clave
 La clave debe tener habilitado **Maps SDK for Android** y estar restringida al
 package `com.collectigo.app` y al SHA-1 del certificado que firma el build.
 `apps/mobile/app.config.js` la entrega al plugin nativo de `react-native-maps`.
+No reutilices esta clave en el backend: la key de Routes API necesita
+restricciones server-side diferentes.
 
 Para compilar e instalar localmente en un dispositivo conectado por USB:
 
@@ -186,8 +189,10 @@ se conserva como alias heredado de `less_walking`).
 
 Si el destino está cerca (< 2.5 km), se evalúa también la opción de ir caminando.
 Las caminatas se trazan por las calles (OSRM/OpenStreetMap) y, si se configura
-`GOOGLE_MAPS_API_KEY` en el backend, la duración del tramo en vehículo usa tráfico
-en tiempo real (Google Routes API); sin key se estima con un factor de hora punta.
+`GOOGLE_ROUTES_API_KEY` en el backend, cada tramo vehicular se refina con Google
+Routes API (`DRIVE` + `TRAFFIC_AWARE`). Sin key o ante errores externos se usa
+una estimación local por distancia y hora punta. La key del backend debe estar
+restringida a Routes API y, en despliegues con IP estable, a la IP del servidor.
 
 El planificador admite rutas directas y viajes con un transbordo. La caminata
 entre vehículos debe ser de 150 m o menos y se valida sobre el recorrido peatonal

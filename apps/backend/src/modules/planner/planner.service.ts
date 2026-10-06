@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type {
   LatLng,
   PlannerBadge,
@@ -10,7 +10,7 @@ import type {
 } from '@collectigo/shared';
 import { RoutesService } from '../routes/routes.service';
 import { WalkRoutingService, type WalkPath } from './walk-routing.service';
-import { TrafficService } from './traffic.service';
+import { TrafficService, type RideDurationEstimate } from './traffic.service';
 import type { RouteEntity } from '../routes/entities/route.entity';
 import type { RoutePathEntity } from '../routes/entities/route-path.entity';
 import {
@@ -122,6 +122,7 @@ interface SegmentConnection {
 
 @Injectable()
 export class PlannerService {
+  private readonly logger = new Logger(PlannerService.name);
   private readonly transferConnectionsCache = new Map<
     string,
     TransferConnection[]
@@ -144,6 +145,9 @@ export class PlannerService {
     const routes = await this.routesService.findAll();
     const candidates = this.buildCandidates(origin, destination, routes);
     const preselected = this.preselect(candidates, mode);
+    this.debug(
+      `Planner: ${candidates.length} candidatos iniciales, ${preselected.length} candidatos refinados, ${preselected.reduce((sum, candidate) => sum + candidate.legs.length, 0)} tramos vehiculares`,
+    );
 
     const directWalkDistance = this.haversine(origin, destination);
     const includeWalkOnly = directWalkDistance <= MAX_DIRECT_WALK_METERS;
@@ -153,6 +157,16 @@ export class PlannerService {
         this.buildTransitResult(candidate, origin, destination),
       ),
     );
+    const timeSources = transitResults
+      .filter((result): result is PlannerResult => result !== null)
+      .flatMap((result) => result.steps)
+      .filter((step) => step.type === 'ride')
+      .reduce<Record<string, number>>((counts, step) => {
+        const source = step.timeSource ?? 'UNKNOWN';
+        counts[source] = (counts[source] ?? 0) + 1;
+        return counts;
+      }, {});
+    this.debug(`Planner: fuentes de tiempo ${JSON.stringify(timeSources)}`);
 
     const options: TripOption[] = transitResults
       .filter((result): result is PlannerResult => result !== null)
@@ -497,7 +511,7 @@ export class PlannerService {
       ),
     ];
     const trafficRequests = candidate.legs.map((leg) =>
-      this.traffic.getRideDurationSeconds(leg.ridePath),
+      this.traffic.getTrafficAwareDuration(leg.ridePath, leg.rideDistance),
     );
 
     const [walkPaths, trafficDurations] = await Promise.all([
@@ -530,10 +544,23 @@ export class PlannerService {
       candidate.walkFromAlight,
     );
     const rideDurations = candidate.legs.map((leg, index) => {
-      const speedFactor = this.safePositive(this.traffic.getSpeedFactor(), 1);
-      const fallback =
-        (leg.rideDistance / (VEHICLE_SPEED_METERS_PER_MIN * speedFactor)) * 60;
-      return Math.round(this.safePositive(trafficDurations[index], fallback));
+      const estimate = trafficDurations[index];
+      const fallback = (leg.rideDistance / VEHICLE_SPEED_METERS_PER_MIN) * 60;
+      if (
+        estimate &&
+        Number.isFinite(estimate.durationSeconds) &&
+        estimate.durationSeconds > 0
+      ) {
+        return {
+          ...estimate,
+          durationSeconds: Math.round(estimate.durationSeconds),
+        };
+      }
+      return {
+        durationSeconds: Math.max(1, Math.round(fallback)),
+        source: 'LOCAL_ESTIMATE',
+        fetchedAt: new Date().toISOString(),
+      } satisfies RideDurationEstimate;
     });
 
     const steps: RouteStep[] = [
@@ -662,7 +689,10 @@ export class PlannerService {
     };
   }
 
-  private buildRideStep(leg: RideLegCandidate, duration: number): RouteStep {
+  private buildRideStep(
+    leg: RideLegCandidate,
+    estimate: RideDurationEstimate,
+  ): RouteStep {
     const variantSuffix = leg.path.variantName
       ? ` (${leg.path.variantName})`
       : '';
@@ -670,7 +700,7 @@ export class PlannerService {
       type: 'ride',
       instruction: `Viaja por la ruta ${leg.route.name}${variantSuffix} hasta el punto de bajada`,
       distance: Math.round(leg.rideDistance),
-      duration,
+      duration: estimate.durationSeconds,
       routeId: leg.route.id,
       routeName: leg.route.name,
       routeColor: leg.route.color,
@@ -678,7 +708,24 @@ export class PlannerService {
       from: leg.boardPoint,
       to: leg.alightPoint,
       path: leg.ridePath,
+      timeSource: estimate.source,
+      ...(estimate.source !== 'LOCAL_ESTIMATE'
+        ? { trafficTimestamp: estimate.fetchedAt }
+        : {}),
+      ...(estimate.durationWithoutTrafficSeconds !== undefined
+        ? {
+            durationWithoutTraffic: Math.round(
+              estimate.durationWithoutTrafficSeconds,
+            ),
+          }
+        : {}),
     };
+  }
+
+  private debug(message: string): void {
+    if ((process.env.NODE_ENV ?? 'development') === 'development') {
+      this.logger.debug(message);
+    }
   }
 
   private async buildWalkOnlyResult(
@@ -951,15 +998,6 @@ export class PlannerService {
     fallback: number,
   ): number {
     return Number.isFinite(value) && Number(value) >= 0
-      ? Number(value)
-      : fallback;
-  }
-
-  private safePositive(
-    value: number | null | undefined,
-    fallback: number,
-  ): number {
-    return Number.isFinite(value) && Number(value) > 0
       ? Number(value)
       : fallback;
   }

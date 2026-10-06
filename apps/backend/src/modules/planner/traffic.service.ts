@@ -1,21 +1,49 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { LatLng } from '@collectigo/shared';
+import type { LatLng, VehicleTimeSource } from '@collectigo/shared';
 
 interface GoogleRoutesResponse {
   routes?: Array<{
-    /** Duración con tráfico en formato "123s". */
-    duration: string;
-    distanceMeters: number;
+    /** ETA considerando tráfico, en formato protobuf Duration (por ejemplo, "123.5s"). */
+    duration?: string;
+    /** ETA sin tráfico actual, devuelto en la misma respuesta. */
+    staticDuration?: string;
   }>;
 }
 
+export interface RideDurationEstimate {
+  durationSeconds: number;
+  durationWithoutTrafficSeconds?: number;
+  source: VehicleTimeSource;
+  /** Momento en que se obtuvo la estimación. No implica la edad del sensor de Google. */
+  fetchedAt: string;
+}
+
+export interface TrafficDiagnostics {
+  googleRequests: number;
+  inFlightHits: number;
+  inFlightMisses: number;
+  googleTrafficResults: number;
+  googleStaticResults: number;
+  localFallbacks: number;
+}
+
+class GoogleRoutesError extends Error {
+  constructor(
+    readonly status: number,
+    message = `Google Routes respondió HTTP ${status}`,
+  ) {
+    super(message);
+  }
+}
+
 const REQUEST_TIMEOUT_MS = 5_000;
-const CACHE_MAX_ENTRIES = 300;
-/** Las condiciones de tráfico se consideran vigentes durante 5 minutos. */
-const CACHE_BUCKET_MS = 5 * 60_000;
-/** La Routes API acepta hasta 25 puntos intermedios por solicitud. */
+const MAX_CONCURRENT_GOOGLE_REQUESTS = 4;
+const MAX_IN_FLIGHT_ENTRIES = 100;
+/** Máximo oficial de Compute Routes; mejora la fidelidad de recorridos curvos. */
 const MAX_INTERMEDIATES = 25;
+const VEHICLE_SPEED_METERS_PER_MIN = 300;
+const WARNING_THROTTLE_MS = 60_000;
 
 /** Horas punta típicas de Huancayo (hora local de Perú, UTC-5 sin horario de verano). */
 const PEAK_HOURS = new Set([7, 8, 12, 13, 18, 19, 20]);
@@ -23,106 +51,302 @@ const PEAK_HOURS = new Set([7, 8, 12, 13, 18, 19, 20]);
 const PEAK_SPEED_FACTOR = 0.65;
 
 /**
- * Estima la duración real del tramo en vehículo usando la Google Routes API
- * con tráfico en tiempo real (routingPreference: TRAFFIC_AWARE).
+ * Refina el tiempo de cada tramo vehicular con Google Routes API.
  *
- * Si no hay GOOGLE_MAPS_API_KEY configurada o la API falla, el planner cae
- * de vuelta a una estimación por velocidad promedio ajustada por hora punta
- * (getSpeedFactor), así que un fallo aquí nunca rompe el cálculo.
+ * La API se consulta desde el backend y las solicitudes iguales que estén en
+ * curso se comparten. El resultado no se conserva después de completarse:
+ * las políticas de Routes API restringen almacenar la mayor parte de su
+ * contenido, incluida la duración estimada.
  */
 @Injectable()
 export class TrafficService {
   private readonly logger = new Logger(TrafficService.name);
   private readonly apiKey: string;
-  private readonly cache = new Map<string, Promise<number | null>>();
+  private readonly isDevelopment: boolean;
+  private readonly inFlight = new Map<string, Promise<RideDurationEstimate>>();
+  private readonly waiters: Array<() => void> = [];
+  private activeGoogleRequests = 0;
+  private readonly lastWarningAt = new Map<string, number>();
+  private readonly diagnostics: TrafficDiagnostics = {
+    googleRequests: 0,
+    inFlightHits: 0,
+    inFlightMisses: 0,
+    googleTrafficResults: 0,
+    googleStaticResults: 0,
+    localFallbacks: 0,
+  };
 
   constructor(config: ConfigService) {
-    this.apiKey = config.get<string>('planner.googleMapsApiKey') ?? '';
+    this.apiKey = config.get<string>('planner.googleRoutesApiKey') ?? '';
+    this.isDevelopment =
+      (config.get<string>('app.nodeEnv') ?? 'development') === 'development';
   }
 
   /**
-   * Duración en segundos del recorrido en vehículo siguiendo las paradas,
-   * con tráfico actual. Devuelve null si la API no está disponible.
+   * Devuelve siempre una duración positiva. Si Google no está disponible,
+   * utiliza distancia/velocidad con ajuste local por hora punta.
+   *
+   * Omitir departureTime significa "salir ahora" según Routes API. Se acepta
+   * una fecha futura para que la interfaz pueda ampliarse sin rediseñarla.
    */
-  async getRideDurationSeconds(path: LatLng[]): Promise<number | null> {
-    if (!this.apiKey || path.length < 2) return null;
+  async getTrafficAwareDuration(
+    path: LatLng[],
+    rideDistanceMeters: number,
+    departureTime?: Date,
+  ): Promise<RideDurationEstimate> {
+    const fallback = (): RideDurationEstimate =>
+      this.localEstimate(path, rideDistanceMeters, departureTime);
 
-    const key = this.cacheKey(path);
-    const cached = this.cache.get(key);
-    if (cached) return cached;
+    if (!this.apiKey || path.length < 2) return fallback();
 
-    const request = this.fetchRideDuration(path).catch((error: unknown) => {
-      this.cache.delete(key);
-      this.logger.warn(
-        `Tráfico de Google no disponible (${(error as Error).message}); se usará estimación por hora`,
-      );
-      return null;
-    });
-
-    if (this.cache.size >= CACHE_MAX_ENTRIES) {
-      const oldestKey = this.cache.keys().next().value;
-      if (oldestKey) this.cache.delete(oldestKey);
+    const sampledPath = this.samplePath(path);
+    const key = this.requestKey(sampledPath, departureTime);
+    const pending = this.inFlight.get(key);
+    if (pending) {
+      this.diagnostics.inFlightHits++;
+      this.debug('Google Routes: solicitud simultánea reutilizada');
+      return pending;
     }
-    this.cache.set(key, request);
 
+    this.diagnostics.inFlightMisses++;
+    this.debug('Google Routes: solicitud nueva (sin coincidencia en curso)');
+    if (this.inFlight.size >= MAX_IN_FLIGHT_ENTRIES) {
+      const oldestKey = this.inFlight.keys().next().value;
+      if (oldestKey) this.inFlight.delete(oldestKey);
+    }
+
+    const request = this.withGoogleConcurrency(() =>
+      this.fetchRideDuration(sampledPath, departureTime),
+    )
+      .catch((error: unknown) => {
+        this.logGoogleFailure(error);
+        return fallback();
+      })
+      .finally(() => {
+        this.inFlight.delete(key);
+      });
+
+    this.inFlight.set(key, request);
     return request;
   }
 
-  /**
-   * Factor de velocidad según la hora local de Perú, usado como respaldo
-   * cuando no hay datos de tráfico en tiempo real (1 = fluido).
-   */
+  getDiagnosticsSnapshot(): TrafficDiagnostics {
+    return { ...this.diagnostics };
+  }
+
+  /** Factor local de respaldo; no se aplica encima de un ETA de Google. */
   getSpeedFactor(now: Date = new Date()): number {
     const limaHour = (now.getUTCHours() + 24 - 5) % 24;
     return PEAK_HOURS.has(limaHour) ? PEAK_SPEED_FACTOR : 1;
   }
 
-  private async fetchRideDuration(path: LatLng[]): Promise<number | null> {
-    const toWaypoint = (p: LatLng) => ({
-      location: { latLng: { latitude: p.lat, longitude: p.lng } },
-    });
+  private async fetchRideDuration(
+    sampledPath: LatLng[],
+    departureTime?: Date,
+  ): Promise<RideDurationEstimate> {
+    const startedAt = Date.now();
+    this.diagnostics.googleRequests++;
 
-    const intermediates = this.sampleIntermediates(path.slice(1, -1));
-
-    const response = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
-      method: 'POST',
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': this.apiKey,
-        'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters',
+    const toWaypoint = (point: LatLng, via = false) => ({
+      location: {
+        latLng: { latitude: point.lat, longitude: point.lng },
       },
-      body: JSON.stringify({
-        origin: toWaypoint(path[0]),
-        destination: toWaypoint(path[path.length - 1]),
-        ...(intermediates.length > 0 ? { intermediates: intermediates.map(toWaypoint) } : {}),
-        travelMode: 'DRIVE',
-        routingPreference: 'TRAFFIC_AWARE',
-      }),
+      ...(via ? { via: true } : {}),
     });
+    const origin = sampledPath[0];
+    const destination = sampledPath[sampledPath.length - 1];
+    const intermediates = sampledPath.slice(1, -1);
+    const validDepartureTime = this.futureDepartureTime(departureTime);
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
+    const response = await fetch(
+      'https://routes.googleapis.com/directions/v2:computeRoutes',
+      {
+        method: 'POST',
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': this.apiKey,
+          'X-Goog-FieldMask': 'routes.duration,routes.staticDuration',
+        },
+        body: JSON.stringify({
+          origin: toWaypoint(origin),
+          destination: toWaypoint(destination),
+          ...(intermediates.length > 0
+            ? {
+                intermediates: intermediates.map((point) =>
+                  toWaypoint(point, true),
+                ),
+              }
+            : {}),
+          travelMode: 'DRIVE',
+          routingPreference: 'TRAFFIC_AWARE',
+          ...(validDepartureTime
+            ? { departureTime: validDepartureTime.toISOString() }
+            : {}),
+        }),
+      },
+    );
+
+    if (!response.ok) throw new GoogleRoutesError(response.status);
 
     const data = (await response.json()) as GoogleRoutesResponse;
-    const duration = data.routes?.[0]?.duration;
-    if (!duration) return null;
+    const route = data.routes?.[0];
+    const trafficSeconds = this.parseDuration(route?.duration);
+    const staticSeconds = this.parseDuration(route?.staticDuration);
+    const fetchedAt = new Date().toISOString();
 
-    const seconds = Number.parseInt(duration, 10);
-    return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+    if (trafficSeconds !== null) {
+      this.diagnostics.googleTrafficResults++;
+      this.debug(
+        `Google Routes: tráfico obtenido en ${Date.now() - startedAt} ms`,
+      );
+      return {
+        durationSeconds: trafficSeconds,
+        ...(staticSeconds !== null
+          ? { durationWithoutTrafficSeconds: staticSeconds }
+          : {}),
+        source: 'GOOGLE_TRAFFIC',
+        fetchedAt,
+      };
+    }
+
+    if (staticSeconds !== null) {
+      this.diagnostics.googleStaticResults++;
+      this.debug(
+        `Google Routes: solo duración estática obtenida en ${Date.now() - startedAt} ms`,
+      );
+      return {
+        durationSeconds: staticSeconds,
+        durationWithoutTrafficSeconds: staticSeconds,
+        source: 'GOOGLE_STATIC',
+        fetchedAt,
+      };
+    }
+
+    throw new Error('Google Routes no devolvió una duración válida');
   }
 
-  /** Reduce los puntos intermedios al máximo que acepta la API, muestreando uniformemente. */
-  private sampleIntermediates(points: LatLng[]): LatLng[] {
-    if (points.length <= MAX_INTERMEDIATES) return points;
-    const step = points.length / MAX_INTERMEDIATES;
-    return Array.from({ length: MAX_INTERMEDIATES }, (_, i) => points[Math.floor(i * step)]);
+  private localEstimate(
+    path: LatLng[],
+    rideDistanceMeters: number,
+    departureTime?: Date,
+  ): RideDurationEstimate {
+    this.diagnostics.localFallbacks++;
+    const pathDistance = this.pathDistance(path);
+    const distance =
+      Number.isFinite(rideDistanceMeters) && rideDistanceMeters > 0
+        ? rideDistanceMeters
+        : pathDistance;
+    const safeDistance =
+      Number.isFinite(distance) && distance > 0 ? distance : 1;
+    const speedFactor = this.getSpeedFactor(departureTime ?? new Date());
+    const seconds = Math.max(
+      1,
+      Math.round(
+        (safeDistance / (VEHICLE_SPEED_METERS_PER_MIN * speedFactor)) * 60,
+      ),
+    );
+
+    this.debug('Tiempo vehicular: fallback local activado');
+    return {
+      durationSeconds: seconds,
+      source: 'LOCAL_ESTIMATE',
+      fetchedAt: new Date().toISOString(),
+    };
   }
 
-  private cacheKey(path: LatLng[]): string {
-    const bucket = Math.floor(Date.now() / CACHE_BUCKET_MS);
-    const coords = path.map((p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join(';');
-    return `${bucket}|${coords}`;
+  private async withGoogleConcurrency<T>(
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    if (this.activeGoogleRequests >= MAX_CONCURRENT_GOOGLE_REQUESTS) {
+      await new Promise<void>((resolve) => this.waiters.push(resolve));
+    }
+
+    this.activeGoogleRequests++;
+    try {
+      return await operation();
+    } finally {
+      this.activeGoogleRequests--;
+      this.waiters.shift()?.();
+    }
+  }
+
+  /** Muestrea toda la geometría, incluidos origen y destino. */
+  private samplePath(path: LatLng[]): LatLng[] {
+    const maxPoints = MAX_INTERMEDIATES + 2;
+    if (path.length <= maxPoints) return path;
+
+    return Array.from({ length: maxPoints }, (_, index) => {
+      const sourceIndex = Math.round(
+        (index * (path.length - 1)) / (maxPoints - 1),
+      );
+      return path[sourceIndex];
+    });
+  }
+
+  private requestKey(path: LatLng[], departureTime?: Date): string {
+    const departure = this.futureDepartureTime(departureTime);
+    const departureKey = departure
+      ? Math.floor(departure.getTime() / 60_000).toString()
+      : 'now';
+    const coords = path
+      .map((point) => `${point.lat.toFixed(5)},${point.lng.toFixed(5)}`)
+      .join(';');
+    return `${departureKey}|${coords}`;
+  }
+
+  private futureDepartureTime(value?: Date): Date | undefined {
+    if (!value || !Number.isFinite(value.getTime())) return undefined;
+    // Un timestamp generado como "ahora" puede quedar en el pasado durante la
+    // llamada. Omitirlo activa el "ahora" nativo de Google.
+    return value.getTime() > Date.now() + 1_000 ? value : undefined;
+  }
+
+  private parseDuration(value?: string): number | null {
+    if (!value?.endsWith('s')) return null;
+    const seconds = Number.parseFloat(value.slice(0, -1));
+    return Number.isFinite(seconds) && seconds > 0 ? Math.round(seconds) : null;
+  }
+
+  private pathDistance(path: LatLng[]): number {
+    let total = 0;
+    for (let index = 1; index < path.length; index++) {
+      total += this.haversine(path[index - 1], path[index]);
+    }
+    return total;
+  }
+
+  private haversine(first: LatLng, second: LatLng): number {
+    const radius = 6_371_000;
+    const firstLat = (first.lat * Math.PI) / 180;
+    const secondLat = (second.lat * Math.PI) / 180;
+    const deltaLat = secondLat - firstLat;
+    const deltaLng = ((second.lng - first.lng) * Math.PI) / 180;
+    const a =
+      Math.sin(deltaLat / 2) ** 2 +
+      Math.cos(firstLat) * Math.cos(secondLat) * Math.sin(deltaLng / 2) ** 2;
+    return radius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  private logGoogleFailure(error: unknown): void {
+    const message =
+      error instanceof Error ? error.message : 'error desconocido';
+    const category =
+      error instanceof GoogleRoutesError ? `http-${error.status}` : 'network';
+    const now = Date.now();
+    const lastWarning = this.lastWarningAt.get(category) ?? 0;
+
+    if (now - lastWarning >= WARNING_THROTTLE_MS) {
+      this.lastWarningAt.set(category, now);
+      this.logger.warn(
+        `Google Routes no disponible (${message}); se usará estimación local`,
+      );
+    } else {
+      this.debug(`Google Routes: ${message}; fallback local`);
+    }
+  }
+
+  private debug(message: string): void {
+    if (this.isDevelopment) this.logger.debug(message);
   }
 }
