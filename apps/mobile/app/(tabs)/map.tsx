@@ -1,4 +1,5 @@
-import { View, Text, TouchableOpacity } from 'react-native';
+import { ScrollView, View, Text, TouchableOpacity } from 'react-native';
+import type { ReactElement } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { SelectionMap } from '../../src/components/map/SelectionMap';
@@ -7,12 +8,20 @@ import { ErrorBanner } from '../../src/components/ui/ErrorBanner';
 import { usePlannerStore } from '../../src/stores/planner.store';
 import { useLocation } from '../../src/hooks/useLocation';
 import { useRouteSearch } from '../../src/hooks/useRouteSearch';
-import type { LatLng } from '@collectigo/shared';
+import type { LatLng, PlannerMode } from '@collectigo/shared';
 
-export default function MapScreen() {
+const PLANNER_MODES: Array<{ value: PlannerMode; label: string }> = [
+  { value: 'balanced', label: 'Equilibrada' },
+  { value: 'fastest', label: 'Más rápida' },
+  { value: 'cheapest', label: 'Más barata' },
+  { value: 'less_walking', label: 'Caminar menos' },
+  { value: 'fewer_transfers', label: 'Menos transbordos' },
+];
+
+export default function MapScreen(): ReactElement {
   const insets = useSafeAreaInsets();
   const { location, errorMessage: locationNotice } = useLocation();
-  const { origin, destination, setOrigin, setDestination, reset, isCalculating } =
+  const { origin, destination, mode, setOrigin, setDestination, setMode, reset, isCalculating } =
     usePlannerStore();
   const { canSearch, search, errorMessage: searchError } = useRouteSearch();
 
@@ -49,6 +58,34 @@ export default function MapScreen() {
         <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
           Planifica tu viaje
         </Text>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 8 }}
+          accessibilityRole="radiogroup"
+        >
+          {PLANNER_MODES.map((plannerMode) => {
+            const selected = mode === plannerMode.value;
+            return (
+              <TouchableOpacity
+                key={plannerMode.value}
+                className={`rounded-full border px-3 py-2 ${
+                  selected ? 'border-blue-600 bg-blue-50' : 'border-gray-200 bg-white'
+                }`}
+                onPress={() => setMode(plannerMode.value)}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: selected }}
+              >
+                <Text
+                  className={`text-xs font-semibold ${selected ? 'text-blue-700' : 'text-gray-500'}`}
+                >
+                  {plannerMode.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
 
         <TouchableOpacity
           className={`flex-row items-center gap-3 rounded-xl px-4 py-3 border ${

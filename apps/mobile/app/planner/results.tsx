@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import type { ReactElement } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -13,6 +14,8 @@ const BADGE_LABEL: Record<PlannerBadge, string> = {
   fastest: 'Más rápida',
   cheapest: 'Más barata',
   shortest: 'Menor distancia',
+  less_walking: 'Menos caminata',
+  fewer_transfers: 'Menos transbordos',
   walk_only: 'A pie',
 };
 
@@ -20,6 +23,16 @@ const RIDE_COLOR = '#2563EB';
 
 function isWalkOnly(result: PlannerResult): boolean {
   return !result.steps.some((s) => s.type === 'ride');
+}
+
+function getTransferCount(result: PlannerResult): number {
+  return (
+    result.transferCount ?? Math.max(0, result.steps.filter((s) => s.type === 'ride').length - 1)
+  );
+}
+
+function transferLabel(count: number): string {
+  return `${count} transbordo${count === 1 ? '' : 's'}`;
 }
 
 function OptionRow({
@@ -32,8 +45,13 @@ function OptionRow({
   isSelected: boolean;
   isBest: boolean;
   onPress: () => void;
-}) {
-  const icon = isWalkOnly(option) ? 'walk-outline' : 'bus-outline';
+}): ReactElement {
+  const transfers = getTransferCount(option);
+  const icon = isWalkOnly(option)
+    ? 'walk-outline'
+    : transfers > 0
+      ? 'repeat-outline'
+      : 'bus-outline';
 
   return (
     <TouchableOpacity
@@ -64,10 +82,15 @@ function OptionRow({
             </View>
           ) : null}
         </View>
-        {option.companyName ? (
+        {option.companyName || transfers > 0 ? (
           <Text className="text-[11px] text-gray-500" numberOfLines={1}>
-            {option.companyName}
-            {option.fleetNumber ? ` · Flota ${option.fleetNumber}` : ''}
+            {[
+              option.companyName,
+              option.fleetNumber ? `Flota ${option.fleetNumber}` : null,
+              transfers > 0 ? transferLabel(transfers) : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           </Text>
         ) : null}
         <View className="flex-row items-center gap-1.5 flex-wrap">
@@ -91,7 +114,9 @@ function OptionRow({
   );
 }
 
-function SummaryCard({ result }: { result: PlannerResult }) {
+function SummaryCard({ result }: { result: PlannerResult }): ReactElement {
+  const transfers = getTransferCount(result);
+
   return (
     <View className="mx-4 my-3 bg-white rounded-2xl border border-gray-100 overflow-hidden">
       <View className="bg-blue-600 px-4 py-2.5 flex-row items-center gap-2">
@@ -104,10 +129,15 @@ function SummaryCard({ result }: { result: PlannerResult }) {
           <Text className="text-white font-semibold text-sm" numberOfLines={1}>
             {result.label ?? result.routeName ?? 'Recorrido'}
           </Text>
-          {result.companyName ? (
+          {result.companyName || transfers > 0 ? (
             <Text className="text-blue-100 text-xs" numberOfLines={1}>
-              {result.routeName} · {result.companyName}
-              {result.fleetNumber ? ` · Flota ${result.fleetNumber}` : ''}
+              {[
+                result.routeName,
+                result.companyName,
+                transfers > 0 ? transferLabel(transfers) : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
             </Text>
           ) : null}
         </View>
@@ -138,7 +168,7 @@ function SummaryCard({ result }: { result: PlannerResult }) {
   );
 }
 
-export default function ResultsScreen() {
+export default function ResultsScreen(): ReactElement | null {
   const insets = useSafeAreaInsets();
   const { response, selectedIndex, setSelectedIndex } = usePlannerStore();
 

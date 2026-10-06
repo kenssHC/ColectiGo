@@ -1,5 +1,22 @@
-import { IsNumber, Max, Min, ValidateNested } from 'class-validator';
+import {
+  IsIn,
+  IsNumber,
+  IsOptional,
+  Max,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
+import type { PlannerMode } from '@collectigo/shared';
+
+const PLANNER_MODES: PlannerMode[] = [
+  'balanced',
+  'fastest',
+  'cheapest',
+  'less_walking',
+  'fewer_transfers',
+  'shortest',
+];
 
 class LatLngDto {
   @IsNumber()
@@ -21,4 +38,8 @@ export class CalculateRouteDto {
   @ValidateNested()
   @Type(() => LatLngDto)
   destination: LatLngDto;
+
+  @IsOptional()
+  @IsIn(PLANNER_MODES)
+  mode?: PlannerMode;
 }

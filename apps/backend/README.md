@@ -32,6 +32,6 @@ src/
 └── modules/
     ├── auth/             # verificación de tokens de Firebase
     ├── users/            # sincronización y perfil de usuarios
-    ├── routes/           # rutas, paradas y sugerencias
-    └── planner/          # cálculo de viajes (más corta / rápida / barata)
+    ├── routes/           # rutas, recorridos y sugerencias
+    └── planner/          # rutas directas/transbordos y clasificación de opciones
 ```

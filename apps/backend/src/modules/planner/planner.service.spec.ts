@@ -4,7 +4,12 @@ import type { RoutesService } from '../routes/routes.service';
 import type { WalkPath, WalkRoutingService } from './walk-routing.service';
 import type { RouteEntity } from '../routes/entities/route.entity';
 import type { RoutePathEntity } from '../routes/entities/route-path.entity';
-import type { LatLng, PlannerResult, RouteDirection, VehicleType } from '@collectigo/shared';
+import type {
+  LatLng,
+  PlannerResult,
+  RouteDirection,
+  VehicleType,
+} from '@collectigo/shared';
 
 function makePath(
   direction: RouteDirection,
@@ -48,6 +53,7 @@ function makeRoute(
 
 interface ServiceMocks {
   walkPath?: WalkPath | null;
+  walkPathResolver?: (from: LatLng, to: LatLng) => WalkPath | null;
   rideSeconds?: number | null;
 }
 
@@ -78,15 +84,28 @@ describe('PlannerService', () => {
     'auto',
   );
 
-  function buildService(routes: RouteEntity[], mocks: ServiceMocks = {}): PlannerService {
+  function buildService(
+    routes: RouteEntity[],
+    mocks: ServiceMocks = {},
+  ): PlannerService {
     const routesService = {
       findAll: jest.fn().mockResolvedValue(routes),
     } as unknown as RoutesService;
     const walkRouting = {
-      getWalkPath: jest.fn().mockResolvedValue(mocks.walkPath ?? null),
+      getWalkPath: jest
+        .fn()
+        .mockImplementation((from: LatLng, to: LatLng) =>
+          Promise.resolve(
+            mocks.walkPathResolver
+              ? mocks.walkPathResolver(from, to)
+              : (mocks.walkPath ?? null),
+          ),
+        ),
     } as unknown as WalkRoutingService;
     const traffic = {
-      getRideDurationSeconds: jest.fn().mockResolvedValue(mocks.rideSeconds ?? null),
+      getRideDurationSeconds: jest
+        .fn()
+        .mockResolvedValue(mocks.rideSeconds ?? null),
       getSpeedFactor: jest.fn().mockReturnValue(1),
     } as unknown as TrafficService;
     return new PlannerService(routesService, walkRouting, traffic);
@@ -101,6 +120,10 @@ describe('PlannerService', () => {
 
   function findTransit(options: PlannerResult[]): PlannerResult | undefined {
     return options.find((o) => o.steps.some((s) => s.type === 'ride'));
+  }
+
+  function findTransfer(options: PlannerResult[]): PlannerResult | undefined {
+    return options.find((o) => o.steps.some((s) => s.type === 'transfer'));
   }
 
   it('devuelve respuesta vacía sin rutas y con destino lejos para caminar', async () => {
@@ -197,9 +220,10 @@ describe('PlannerService', () => {
     // La económica equilibra tiempo, costo y distancia: gana el puntaje.
     expect(response.best.totalFare).toBe(1.0);
 
-    // Las alternativas incluyen la expresa y la opción a pie.
+    // Las opciones conservan ambas rutas directas; también pueden aparecer
+    // combinaciones con transbordo si mejoran alguna dimensión del viaje.
     const fares = options.map((o) => o.totalFare).sort((a, b) => a - b);
-    expect(fares).toEqual([0, 1.0, 2.5]);
+    expect(fares).toEqual(expect.arrayContaining([1.0, 2.5]));
 
     // Los puntajes están ordenados de mejor a peor.
     const scores = options.map((o) => o.score ?? 0);
@@ -221,12 +245,19 @@ describe('PlannerService', () => {
     expect(transit!.fleetNumber).toBe('135');
 
     const steps = transit!.steps;
-    expect(steps.map((s) => s.type)).toEqual(['walk', 'board', 'ride', 'arrive']);
+    expect(steps.map((s) => s.type)).toEqual([
+      'walk',
+      'board',
+      'ride',
+      'arrive',
+    ]);
     expect(steps[1].fare).toBe(1.0);
     expect(steps[1].duration).toBe(240);
     expect(steps[1].instruction).toContain('Virgen del Carmen');
     expect(steps[1].instruction).toContain('flota 135');
-    expect(transit!.totalDuration).toBe(steps.reduce((sum, s) => sum + (s.duration ?? 0), 0));
+    expect(transit!.totalDuration).toBe(
+      steps.reduce((sum, s) => sum + (s.duration ?? 0), 0),
+    );
 
     // El paso "ride" trae la polilínea recortada para dibujar en el mapa.
     const rideStep = steps[2];
@@ -253,7 +284,15 @@ describe('PlannerService', () => {
       ],
       distance: 180,
     };
-    const service = buildService([cheapRoute], { walkPath: streetPath });
+    const service = buildService([cheapRoute], {
+      walkPathResolver: (from, to) =>
+        from.lat === origin.lat &&
+        from.lng === origin.lng &&
+        to.lat === destination.lat &&
+        to.lng === destination.lng
+          ? { path: [from, to], distance: 3_000 }
+          : streetPath,
+    });
     const response = await service.calculate(origin, destination);
     const transit = findTransit(allOptions(response));
 
@@ -266,7 +305,9 @@ describe('PlannerService', () => {
   it('mantiene la línea recta cuando el ruteo peatonal no está disponible', async () => {
     const service = buildService([cheapRoute]);
     const response = await service.calculate(origin, destination);
-    const walkStep = findTransit(allOptions(response))!.steps.find((s) => s.type === 'walk');
+    const walkStep = findTransit(allOptions(response))!.steps.find(
+      (s) => s.type === 'walk',
+    );
 
     expect(walkStep?.path).toBeUndefined();
     expect(walkStep?.distance).toBeGreaterThan(0);
@@ -283,6 +324,114 @@ describe('PlannerService', () => {
     expect(findTransit(allOptions(response))).toBeUndefined();
     expect(response.best.badges).toContain('walk_only');
   });
+
+  it('combina dos rutas y cobra cada abordaje por separado', async () => {
+    const firstRoute = makeRoute('TA-01', 2, [
+      makePath('ida', [
+        { lat: 0, lng: 0 },
+        { lat: 0.01, lng: 0 },
+      ]),
+    ]);
+    const secondRoute = makeRoute('TAT-02', 2, [
+      makePath('ida', [
+        { lat: 0.01, lng: 0 },
+        { lat: 0.01, lng: 0.02 },
+      ]),
+    ]);
+    const service = buildService([firstRoute, secondRoute]);
+    const response = await service.calculate(origin, { lat: 0.01, lng: 0.02 });
+    const transfer = findTransfer(allOptions(response));
+
+    expect(transfer).toBeDefined();
+    expect(transfer!.routeName).toBe('TA-01 → TAT-02');
+    expect(transfer!.transferCount).toBe(1);
+    expect(transfer!.totalFare).toBe(4);
+    expect(transfer!.steps.map((step) => step.type)).toEqual([
+      'walk',
+      'board',
+      'ride',
+      'transfer',
+      'board',
+      'ride',
+      'arrive',
+    ]);
+    expect(
+      transfer!.steps
+        .filter((step) => step.type === 'board')
+        .map((step) => step.fare),
+    ).toEqual([2, 2]);
+  });
+
+  it('no conecta rutas separadas por más de 150 metros', async () => {
+    const firstRoute = makeRoute('TA-01', 2, [
+      makePath('ida', [
+        { lat: 0, lng: 0 },
+        { lat: 0.01, lng: 0 },
+      ]),
+    ]);
+    const separatedRoute = makeRoute('TAT-02', 2, [
+      makePath('ida', [
+        { lat: 0.01, lng: 0.002 },
+        { lat: 0.01, lng: 0.02 },
+      ]),
+    ]);
+    const service = buildService([firstRoute, separatedRoute]);
+    const response = await service.calculate(origin, { lat: 0.01, lng: 0.02 });
+
+    expect(findTransfer(allOptions(response))).toBeUndefined();
+  });
+
+  it('descarta el transbordo si la caminata real por calles supera 150 metros', async () => {
+    const firstRoute = makeRoute('TA-01', 2, [
+      makePath('ida', [
+        { lat: 0, lng: 0 },
+        { lat: 0.01, lng: 0 },
+      ]),
+    ]);
+    const nearbyRoute = makeRoute('TAT-02', 2, [
+      makePath('ida', [
+        { lat: 0.01, lng: 0.0009 },
+        { lat: 0.01, lng: 0.02 },
+      ]),
+    ]);
+    const service = buildService([firstRoute, nearbyRoute], {
+      walkPathResolver: (from, to) => {
+        if (from.lat === to.lat && from.lng === to.lng) return null;
+        return { path: [from, to], distance: 180 };
+      },
+    });
+    const response = await service.calculate(origin, { lat: 0.01, lng: 0.02 });
+
+    expect(findTransfer(allOptions(response))).toBeUndefined();
+  });
+
+  it.each([
+    [4_450, 0.04, 2],
+    [5_560, 0.05, 2.5],
+    [6_670, 0.06, 3],
+  ])(
+    'calcula la tarifa TA por distancia: ~%im cuesta S/ %s',
+    async (_approximateMeters, destinationLng, expectedFare) => {
+      const route = makeRoute('TA-99', 2, [
+        makePath('ida', [
+          { lat: 0, lng: 0 },
+          { lat: 0, lng: 0.08 },
+        ]),
+      ]);
+      const service = buildService([route]);
+      const response = await service.calculate(origin, {
+        lat: 0,
+        lng: destinationLng,
+      });
+      const transit = findTransit(allOptions(response));
+
+      expect(transit).toBeDefined();
+      expect(transit!.totalFare).toBe(expectedFare);
+      expect(transit!.steps.find((step) => step.type === 'board')?.fare).toBe(
+        expectedFare,
+      );
+    },
+  );
 });
 
 describe('TrafficService.getSpeedFactor', () => {
@@ -291,7 +440,9 @@ describe('TrafficService.getSpeedFactor', () => {
 
   it('reduce la velocidad en hora punta de Perú', () => {
     // 13:00 en Lima = 18:00 UTC
-    expect(service.getSpeedFactor(new Date('2026-08-21T18:00:00Z'))).toBeLessThan(1);
+    expect(
+      service.getSpeedFactor(new Date('2026-08-21T18:00:00Z')),
+    ).toBeLessThan(1);
   });
 
   it('velocidad normal fuera de hora punta', () => {

@@ -1,5 +1,7 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
+import { ValidationPipe } from '@nestjs/common';
+import type { INestApplication } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import type { TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { AppController } from '../src/app.controller';
 import { PlannerController } from '../src/modules/planner/planner.controller';
@@ -42,7 +44,9 @@ describe('API (e2e ligero)', () => {
   });
 
   it('GET /api/v1/health responde ok', async () => {
-    const response = await request(app.getHttpServer()).get('/api/v1/health').expect(200);
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/health')
+      .expect(200);
 
     expect(response.body.status).toBe('ok');
     expect(response.body.timestamp).toBeDefined();
@@ -63,8 +67,46 @@ describe('API (e2e ligero)', () => {
       destination: { lat: -12.08, lng: -75.21 },
     };
 
-    await request(app.getHttpServer()).post('/api/v1/planner/calculate').send(body).expect(200);
+    await request(app.getHttpServer())
+      .post('/api/v1/planner/calculate')
+      .send(body)
+      .expect(200);
 
-    expect(plannerService.calculate).toHaveBeenCalledWith(body.origin, body.destination);
+    expect(plannerService.calculate).toHaveBeenCalledWith(
+      body.origin,
+      body.destination,
+    );
+  });
+
+  it('POST /api/v1/planner/calculate acepta un modo de planificación válido', async () => {
+    const body = {
+      origin: { lat: -12.0651, lng: -75.2049 },
+      destination: { lat: -12.08, lng: -75.21 },
+      mode: 'less_walking',
+    };
+
+    await request(app.getHttpServer())
+      .post('/api/v1/planner/calculate')
+      .send(body)
+      .expect(200);
+
+    expect(plannerService.calculate).toHaveBeenCalledWith(
+      body.origin,
+      body.destination,
+      body.mode,
+    );
+  });
+
+  it('POST /api/v1/planner/calculate rechaza un modo desconocido', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/planner/calculate')
+      .send({
+        origin: { lat: -12.0651, lng: -75.2049 },
+        destination: { lat: -12.08, lng: -75.21 },
+        mode: 'teletransporte',
+      })
+      .expect(400);
+
+    expect(plannerService.calculate).not.toHaveBeenCalled();
   });
 });

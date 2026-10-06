@@ -45,13 +45,13 @@ Esto crea el contenedor `collectigo-postgres` con usuario/contraseña `postgres`
 cp apps/backend/.env.example apps/backend/.env
 ```
 
-| Variable | Descripción |
-|---|---|
-| `DATABASE_*` | Conexión a PostgreSQL |
-| `FIREBASE_PROJECT_ID` | ID del proyecto en Firebase Console |
-| `FIREBASE_CLIENT_EMAIL` | Client email del service account |
-| `FIREBASE_PRIVATE_KEY` | Private key del service account (con `\n` escapados) |
-| `CORS_ORIGINS` | Orígenes permitidos separados por coma (`*` solo en desarrollo) |
+| Variable                | Descripción                                                     |
+| ----------------------- | --------------------------------------------------------------- |
+| `DATABASE_*`            | Conexión a PostgreSQL                                           |
+| `FIREBASE_PROJECT_ID`   | ID del proyecto en Firebase Console                             |
+| `FIREBASE_CLIENT_EMAIL` | Client email del service account                                |
+| `FIREBASE_PRIVATE_KEY`  | Private key del service account (con `\n` escapados)            |
+| `CORS_ORIGINS`          | Orígenes permitidos separados por coma (`*` solo en desarrollo) |
 
 El backend valida las credenciales de Firebase al arrancar.
 
@@ -80,10 +80,10 @@ en cualquier punto del recorrido, y el planner calcula el punto exacto.
 cp apps/mobile/.env.example apps/mobile/.env
 ```
 
-| Variable | Descripción |
-|---|---|
-| `EXPO_PUBLIC_API_URL` | URL del backend. En dispositivo físico usa la IP LAN (ej. `http://192.168.1.10:3000/api/v1`) |
-| `EXPO_PUBLIC_FIREBASE_*` | Configuración web de Firebase (Consola → Configuración del proyecto → Tus apps) |
+| Variable                 | Descripción                                                                                  |
+| ------------------------ | -------------------------------------------------------------------------------------------- |
+| `EXPO_PUBLIC_API_URL`    | URL del backend. En dispositivo físico usa la IP LAN (ej. `http://192.168.1.10:3000/api/v1`) |
+| `EXPO_PUBLIC_FIREBASE_*` | Configuración web de Firebase (Consola → Configuración del proyecto → Tus apps)              |
 
 ### 6. Google Maps y development build
 
@@ -153,18 +153,18 @@ admin.auth().setCustomUserClaims(uid, { admin: true });
 
 Todos con prefijo `/api/v1`. Las respuestas de error incluyen `requestId` (`X-Request-Id`).
 
-| Método | Ruta | Auth | Descripción |
-|---|---|---|---|
-| `GET` | `/health` | — | Health check (sin rate limit) |
-| `POST` | `/users/sync` | Token | Crea/recupera el usuario a partir del token |
-| `GET` | `/users/me` | Token | Perfil del usuario autenticado |
-| `GET` | `/routes` | — | Lista rutas activas (con paradas) |
-| `GET` | `/routes/:id` | — | Ruta por ID |
-| `POST` | `/routes` | Token + admin | Crea una ruta de transporte |
-| `POST` | `/routes/:id/suggestions` | Token | Envía una sugerencia de corrección |
-| `GET` | `/routes/suggestions/mine` | Token | Sugerencias del usuario autenticado |
-| `PATCH` | `/routes/suggestions/:id` | Token + admin | Aprueba o rechaza una sugerencia |
-| `POST` | `/planner/calculate` | — | Calcula rutas entre dos puntos (20 req/min) |
+| Método  | Ruta                       | Auth          | Descripción                                 |
+| ------- | -------------------------- | ------------- | ------------------------------------------- |
+| `GET`   | `/health`                  | —             | Health check (sin rate limit)               |
+| `POST`  | `/users/sync`              | Token         | Crea/recupera el usuario a partir del token |
+| `GET`   | `/users/me`                | Token         | Perfil del usuario autenticado              |
+| `GET`   | `/routes`                  | —             | Lista rutas activas con sus recorridos      |
+| `GET`   | `/routes/:id`              | —             | Ruta por ID                                 |
+| `POST`  | `/routes`                  | Token + admin | Crea una ruta de transporte                 |
+| `POST`  | `/routes/:id/suggestions`  | Token         | Envía una sugerencia de corrección          |
+| `GET`   | `/routes/suggestions/mine` | Token         | Sugerencias del usuario autenticado         |
+| `PATCH` | `/routes/suggestions/:id`  | Token + admin | Aprueba o rechaza una sugerencia            |
+| `POST`  | `/planner/calculate`       | —             | Calcula rutas entre dos puntos (20 req/min) |
 
 ### Ejemplo: Calcular ruta
 
@@ -172,13 +172,25 @@ Todos con prefijo `/api/v1`. Las respuestas de error incluyen `requestId` (`X-Re
 POST /api/v1/planner/calculate
 {
   "origin": { "lat": -12.0651, "lng": -75.2049 },
-  "destination": { "lat": -12.0800, "lng": -75.2100 }
+  "destination": { "lat": -12.0800, "lng": -75.2100 },
+  "mode": "balanced"
 }
 ```
 
-La respuesta incluye la mejor opción (`best`) según un puntaje que combina tiempo,
-costo y distancia, más una lista de `alternatives` ordenadas. Si el destino está
-cerca (< 2.5 km), se evalúa también la opción de ir caminando. Las caminatas se
-trazan por las calles (OSRM/OpenStreetMap) y, si se configura `GOOGLE_MAPS_API_KEY`
-en el backend, la duración del tramo en vehículo usa tráfico en tiempo real
-(Google Routes API); sin key se estima con un factor de hora punta.
+La respuesta incluye la mejor opción (`best`) según un costo generalizado estable,
+más alternativas Pareto-óptimas y diversas. El costo separa tiempo en vehículo,
+caminata, espera, transbordos y tarifa; `totalDistance` queda como información y
+desempate, no como una penalización adicional. Los modos disponibles son
+`balanced`, `fastest`, `cheapest`, `less_walking` y `fewer_transfers` (`shortest`
+se conserva como alias heredado de `less_walking`).
+
+Si el destino está cerca (< 2.5 km), se evalúa también la opción de ir caminando.
+Las caminatas se trazan por las calles (OSRM/OpenStreetMap) y, si se configura
+`GOOGLE_MAPS_API_KEY` en el backend, la duración del tramo en vehículo usa tráfico
+en tiempo real (Google Routes API); sin key se estima con un factor de hora punta.
+
+El planificador admite rutas directas y viajes con un transbordo. La caminata
+entre vehículos debe ser de 150 m o menos y se valida sobre el recorrido peatonal
+real cuando OSRM está disponible. Cada abordaje cobra su propia tarifa. En rutas
+TA/TAT, la tarifa base aplica hasta 5 km, aumenta S/ 0.50 entre más de 5 y 6 km,
+y aumenta S/ 1.00 cuando el tramo supera 6 km.

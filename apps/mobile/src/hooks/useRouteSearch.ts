@@ -10,7 +10,7 @@ interface UseRouteSearchResult {
 }
 
 export function useRouteSearch(): UseRouteSearchResult {
-  const { origin, destination, setResponse, setCalculating } = usePlannerStore();
+  const { origin, destination, mode, setResponse, setCalculating } = usePlannerStore();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const canSearch = origin !== null && destination !== null;
@@ -21,17 +21,15 @@ export function useRouteSearch(): UseRouteSearchResult {
     setCalculating(true);
     setErrorMessage(null);
     try {
-      const response = await plannerService.calculate({ origin, destination });
+      const response = await plannerService.calculate({ origin, destination, mode });
       setResponse(response);
       router.push('/planner/results');
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : 'No se pudieron calcular las rutas',
-      );
+      setErrorMessage(error instanceof Error ? error.message : 'No se pudieron calcular las rutas');
     } finally {
       setCalculating(false);
     }
-  }, [origin, destination, setResponse, setCalculating]);
+  }, [origin, destination, mode, setResponse, setCalculating]);
 
   return { canSearch, search, errorMessage };
 }

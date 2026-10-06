@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ComponentType, RefAttributes } from 'react';
+import type { ComponentType, ReactElement, RefAttributes } from 'react';
 import { Platform, View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { LatLng, PlannerResult } from '@collectigo/shared';
@@ -8,11 +8,10 @@ import type { MapMarkerProps, MapPolylineProps, MapViewProps } from 'react-nativ
 
 interface ResultMapProps {
   result: PlannerResult;
-  /** Color de la línea del tramo en vehículo (según el modo activo). */
+  /** Color de respaldo para recorridos sin un color de ruta configurado. */
   rideColor: string;
 }
 
-// react-native-maps no tiene soporte web: se carga solo en plataformas nativas.
 type MapsModule = typeof ReactNativeMaps;
 type MapViewInstance = InstanceType<MapsModule['default']>;
 
@@ -22,58 +21,76 @@ if (Platform.OS !== 'web') {
   maps = require('react-native-maps') as MapsModule;
 }
 
+interface MapPath {
+  path: LatLng[];
+  color: string;
+  dashed: boolean;
+}
+
+interface TripMarker {
+  coordinate: LatLng;
+  title: string;
+  color: string;
+}
+
 interface TripGeometry {
   origin: LatLng | null;
   destination: LatLng | null;
-  boardStop: LatLng | null;
-  alightStop: LatLng | null;
-  ridePath: LatLng[];
-  /** Caminata origen → paradero. Sigue las calles si el backend envió el trazado. */
-  walkInPath: LatLng[];
-  /** Caminata paradero de bajada → destino. */
-  walkOutPath: LatLng[];
+  paths: MapPath[];
+  markers: TripMarker[];
 }
 
-function extractGeometry(result: PlannerResult): TripGeometry {
-  const walkStep = result.steps.find((s) => s.type === 'walk');
-  const rideStep = result.steps.find((s) => s.type === 'ride');
-  const arriveStep = result.steps.find((s) => s.type === 'arrive');
+const straight = (from: LatLng | undefined, to: LatLng | undefined): LatLng[] =>
+  from && to ? [from, to] : [];
 
-  const origin = walkStep?.from ?? null;
-  const straight = (a: LatLng | null, b: LatLng | null): LatLng[] => (a && b ? [a, b] : []);
+function extractGeometry(result: PlannerResult, fallbackRideColor: string): TripGeometry {
+  const locatedSteps = result.steps.filter((step) => step.from || step.to);
+  const origin = locatedSteps.find((step) => step.from)?.from ?? null;
+  const destination = [...locatedSteps].reverse().find((step) => step.to)?.to ?? null;
+  const paths: MapPath[] = [];
+  const markers: TripMarker[] = [];
 
-  // Viaje solo a pie: un único paso walk, sin paraderos.
-  if (!rideStep) {
-    const destination = arriveStep?.to ?? walkStep?.to ?? null;
-    return {
-      origin,
-      destination,
-      boardStop: null,
-      alightStop: null,
-      ridePath: [],
-      walkInPath: walkStep?.path ?? straight(origin, destination),
-      walkOutPath: [],
-    };
+  for (const step of result.steps) {
+    const path = step.path ?? straight(step.from, step.to);
+    if (path.length >= 2 && ['walk', 'transfer', 'arrive'].includes(step.type)) {
+      paths.push({
+        path,
+        color: step.type === 'transfer' ? '#9333EA' : '#9CA3AF',
+        dashed: true,
+      });
+    }
+
+    if (step.type === 'ride') {
+      const color = step.routeColor ?? fallbackRideColor;
+      if (path.length >= 2) paths.push({ path, color, dashed: false });
+      if (step.from) {
+        markers.push({
+          coordinate: step.from,
+          title: `Sube a ${step.routeName ?? 'la ruta'}`,
+          color,
+        });
+      }
+      if (step.to) {
+        markers.push({
+          coordinate: step.to,
+          title: `Baja de ${step.routeName ?? 'la ruta'}`,
+          color,
+        });
+      }
+    }
   }
 
-  const destination = arriveStep?.to ?? null;
-  const boardStop = rideStep.from ?? walkStep?.to ?? null;
-  const alightStop = rideStep.to ?? arriveStep?.from ?? null;
-
-  return {
-    origin,
-    destination,
-    boardStop,
-    alightStop,
-    ridePath: rideStep.path ?? [],
-    walkInPath: walkStep?.path ?? straight(origin, boardStop),
-    walkOutPath: arriveStep?.path ?? straight(alightStop, destination),
-  };
+  return { origin, destination, paths, markers };
 }
 
-function computeRegion(points: LatLng[]) {
-  const lats = points.map((p) => p.lat);
-  const lngs = points.map((p) => p.lng);
+function computeRegion(points: LatLng[]): {
+  latitude: number;
+  longitude: number;
+  latitudeDelta: number;
+  longitudeDelta: number;
+} {
+  const lats = points.map((point) => point.lat);
+  const lngs = points.map((point) => point.lng);
   const minLat = Math.min(...lats);
   const maxLat = Math.max(...lats);
   const minLng = Math.min(...lngs);
@@ -87,34 +104,27 @@ function computeRegion(points: LatLng[]) {
   };
 }
 
-const toCoord = (p: LatLng) => ({ latitude: p.lat, longitude: p.lng });
+const toCoord = (point: LatLng): { latitude: number; longitude: number } => ({
+  latitude: point.lat,
+  longitude: point.lng,
+});
 
-export function ResultMap({ result, rideColor }: ResultMapProps) {
+export function ResultMap({ result, rideColor }: ResultMapProps): ReactElement | null {
   const mapRef = useRef<MapViewInstance | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
+  const geometry = useMemo(() => extractGeometry(result, rideColor), [result, rideColor]);
 
-  const geometry = useMemo(() => extractGeometry(result), [result]);
+  const allPoints = useMemo(
+    () =>
+      [
+        geometry.origin,
+        geometry.destination,
+        ...geometry.paths.flatMap((segment) => segment.path),
+        ...geometry.markers.map((marker) => marker.coordinate),
+      ].filter((point): point is LatLng => point !== null),
+    [geometry],
+  );
 
-  const allPoints = useMemo(() => {
-    const { origin, destination, boardStop, alightStop, ridePath, walkInPath, walkOutPath } =
-      geometry;
-    return [
-      origin,
-      destination,
-      boardStop,
-      alightStop,
-      ...ridePath,
-      ...walkInPath,
-      ...walkOutPath,
-    ].filter((p): p is LatLng => p !== null);
-  }, [geometry]);
-
-  /**
-   * En Android, initialRegion suele ignorarse cuando el mapa se monta dentro
-   * de un ScrollView (las dimensiones aún no están definidas). fitToCoordinates
-   * tras onMapReady garantiza el encuadre correcto, y también reencuadra al
-   * cambiar de modo (shortest/fastest/cheapest).
-   */
   const fitToTrip = useCallback(
     (animated: boolean) => {
       if (!mapRef.current || allPoints.length < 2) return;
@@ -127,9 +137,7 @@ export function ResultMap({ result, rideColor }: ResultMapProps) {
   );
 
   useEffect(() => {
-    if (isMapReady) {
-      fitToTrip(false);
-    }
+    if (isMapReady) fitToTrip(false);
   }, [isMapReady, fitToTrip]);
 
   if (!maps || result.steps.length === 0) {
@@ -145,15 +153,8 @@ export function ResultMap({ result, rideColor }: ResultMapProps) {
     return null;
   }
 
-  const { origin, destination, boardStop, alightStop, ridePath, walkInPath, walkOutPath } =
-    geometry;
+  if (allPoints.length < 2) return null;
 
-  if (allPoints.length < 2) {
-    return null;
-  }
-
-  // Normaliza los tipos publicados contra React 19.1 al JSX de React 19.2
-  // incluido por Expo SDK 57. No cambia los componentes usados en runtime.
   const MapView = maps.default as unknown as ComponentType<
     MapViewProps & RefAttributes<MapViewInstance>
   >;
@@ -174,41 +175,29 @@ export function ResultMap({ result, rideColor }: ResultMapProps) {
         pitchEnabled={false}
         toolbarEnabled={false}
       >
-        {walkInPath.length >= 2 ? (
+        {geometry.paths.map((segment, index) => (
           <Polyline
-            coordinates={walkInPath.map(toCoord)}
-            strokeColor="#9CA3AF"
-            strokeWidth={3}
-            lineDashPattern={[6, 6]}
+            key={`path-${index}`}
+            coordinates={segment.path.map(toCoord)}
+            strokeColor={segment.color}
+            strokeWidth={segment.dashed ? 3 : 4}
+            {...(segment.dashed ? { lineDashPattern: [6, 6] } : {})}
           />
-        ) : null}
+        ))}
 
-        {ridePath.length >= 2 ? (
-          <Polyline
-            coordinates={ridePath.map(toCoord)}
-            strokeColor={rideColor}
-            strokeWidth={4}
+        {geometry.origin ? (
+          <Marker coordinate={toCoord(geometry.origin)} title="Origen" pinColor="#1D4ED8" />
+        ) : null}
+        {geometry.markers.map((marker, index) => (
+          <Marker
+            key={`marker-${index}`}
+            coordinate={toCoord(marker.coordinate)}
+            title={marker.title}
+            pinColor={marker.color}
           />
-        ) : null}
-
-        {walkOutPath.length >= 2 ? (
-          <Polyline
-            coordinates={walkOutPath.map(toCoord)}
-            strokeColor="#9CA3AF"
-            strokeWidth={3}
-            lineDashPattern={[6, 6]}
-          />
-        ) : null}
-
-        {origin ? <Marker coordinate={toCoord(origin)} title="Origen" pinColor="#1D4ED8" /> : null}
-        {boardStop ? (
-          <Marker coordinate={toCoord(boardStop)} title="Sube aquí" pinColor={rideColor} />
-        ) : null}
-        {alightStop ? (
-          <Marker coordinate={toCoord(alightStop)} title="Baja aquí" pinColor={rideColor} />
-        ) : null}
-        {destination ? (
-          <Marker coordinate={toCoord(destination)} title="Destino" pinColor="#DC2626" />
+        ))}
+        {geometry.destination ? (
+          <Marker coordinate={toCoord(geometry.destination)} title="Destino" pinColor="#DC2626" />
         ) : null}
       </MapView>
 
