@@ -1,8 +1,8 @@
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { localAuthService } from '../../src/services/local-auth.service';
+import { authService } from '../../src/services/auth.service';
 import { useAuthStore } from '../../src/stores/auth.store';
 
 interface ProfileOptionProps {
@@ -12,12 +12,25 @@ interface ProfileOptionProps {
   showDivider?: boolean;
 }
 
+function showComingSoon(): void {
+  Alert.alert('Próximamente', 'Esta funcionalidad estará disponible en una próxima versión.');
+}
+
+function showAbout(): void {
+  Alert.alert(
+    'Sobre ColectiGO',
+    'ColectiGO te ayuda a planificar viajes en colectivos, autos y buses de Huancayo.\n\nVersión 1.0.0\nTransporte local, a tu ritmo.',
+  );
+}
+
 function ProfileOption({ icon, label, onPress, showDivider = true }: ProfileOptionProps) {
   return (
     <>
       <TouchableOpacity
         className="flex-row items-center gap-3 py-3.5 active:opacity-60"
         onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={label}
       >
         <View className="w-9 h-9 bg-blue-50 rounded-xl items-center justify-center">
           <Ionicons name={icon} size={18} color="#2563EB" />
@@ -31,6 +44,7 @@ function ProfileOption({ icon, label, onPress, showDivider = true }: ProfileOpti
 }
 
 export default function ProfileScreen() {
+  const insets = useSafeAreaInsets();
   const { user, setUser } = useAuthStore();
 
   const initials = user?.displayName
@@ -43,13 +57,16 @@ export default function ProfileScreen() {
     : '?';
 
   async function handleLogout(): Promise<void> {
-    await localAuthService.signOut();
-    setUser(null);
-    router.replace('/(auth)/login');
+    try {
+      await authService.signOut();
+    } finally {
+      setUser(null);
+      router.replace('/(auth)/login');
+    }
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50" edges={['top']}>
+    <View className="flex-1 bg-gray-50" style={{ paddingTop: insets.top }}>
       <View className="px-4 py-3 border-b border-gray-100 bg-white">
         <Text className="text-lg font-bold text-gray-900">Perfil</Text>
       </View>
@@ -82,12 +99,12 @@ export default function ProfileScreen() {
           <ProfileOption
             icon="git-branch-outline"
             label="Mis sugerencias de rutas"
-            onPress={() => {}}
+            onPress={() => router.push('/profile/suggestions')}
           />
           <ProfileOption
             icon="bookmark-outline"
             label="Rutas guardadas"
-            onPress={() => {}}
+            onPress={showComingSoon}
             showDivider={false}
           />
         </View>
@@ -96,11 +113,15 @@ export default function ProfileScreen() {
           <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-4 pb-2">
             Configuración
           </Text>
-          <ProfileOption icon="notifications-outline" label="Notificaciones" onPress={() => {}} />
+          <ProfileOption
+            icon="notifications-outline"
+            label="Notificaciones"
+            onPress={showComingSoon}
+          />
           <ProfileOption
             icon="information-circle-outline"
             label="Sobre ColectiGO"
-            onPress={() => {}}
+            onPress={showAbout}
             showDivider={false}
           />
         </View>
@@ -109,12 +130,14 @@ export default function ProfileScreen() {
           <TouchableOpacity
             className="flex-row items-center justify-center gap-2 bg-red-50 rounded-2xl py-4 border border-red-100 active:opacity-70"
             onPress={handleLogout}
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar sesión"
           >
             <Ionicons name="log-out-outline" size={18} color="#DC2626" />
             <Text className="text-red-600 font-semibold text-sm">Cerrar sesión</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }

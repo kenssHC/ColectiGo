@@ -6,16 +6,19 @@ import {
   Platform,
   ScrollView,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
-import { localAuthService } from '../../src/services/local-auth.service';
+import { ErrorBanner } from '../../src/components/ui/ErrorBanner';
+import { authService, getAuthErrorMessage } from '../../src/services/auth.service';
 import { useAuthStore } from '../../src/stores/auth.store';
 
 export default function LoginScreen() {
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -32,18 +35,34 @@ export default function LoginScreen() {
     setIsLoading(true);
     setErrorMessage('');
     try {
-      const user = await localAuthService.signIn(email, password);
+      const user = await authService.signIn(email, password);
       setUser(user);
       router.replace('/(tabs)/map');
-    } catch {
-      setErrorMessage('No se pudo iniciar sesión. Intenta nuevamente');
+    } catch (error) {
+      setErrorMessage(getAuthErrorMessage(error, 'No se pudo iniciar sesión. Intenta nuevamente'));
     } finally {
       setIsLoading(false);
     }
   }
 
+  async function handleForgotPassword(): Promise<void> {
+    if (!email.trim()) {
+      setErrorMessage('Escribe tu correo para enviarte el enlace de recuperación');
+      return;
+    }
+    try {
+      await authService.sendPasswordReset(email);
+      Alert.alert(
+        'Correo enviado',
+        `Si existe una cuenta para ${email.trim()}, recibirás un enlace para restablecer tu contraseña.`,
+      );
+    } catch (error) {
+      setErrorMessage(getAuthErrorMessage(error, 'No se pudo enviar el correo de recuperación'));
+    }
+  }
+
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <View className="flex-1 bg-white" style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}>
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -96,6 +115,11 @@ export default function LoginScreen() {
                   <TouchableOpacity
                     className="absolute right-3 top-3.5"
                     onPress={() => setShowPassword((v) => !v)}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'
+                    }
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
                     <Ionicons
                       name={showPassword ? 'eye-off-outline' : 'eye-outline'}
@@ -106,12 +130,18 @@ export default function LoginScreen() {
                 </View>
               </View>
 
-              {errorMessage ? (
-                <View className="flex-row items-center gap-2 bg-red-50 rounded-xl px-3 py-2.5 border border-red-100">
-                  <Ionicons name="alert-circle-outline" size={16} color="#DC2626" />
-                  <Text className="text-red-600 text-sm flex-1">{errorMessage}</Text>
-                </View>
-              ) : null}
+              <TouchableOpacity
+                className="self-end"
+                onPress={handleForgotPassword}
+                accessibilityRole="button"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text className="text-blue-700 text-sm font-medium">
+                  ¿Olvidaste tu contraseña?
+                </Text>
+              </TouchableOpacity>
+
+              {errorMessage ? <ErrorBanner message={errorMessage} /> : null}
             </View>
 
             <View className="gap-3">
@@ -126,6 +156,7 @@ export default function LoginScreen() {
               <TouchableOpacity
                 className="py-3 items-center"
                 onPress={() => router.push('/(auth)/register')}
+                accessibilityRole="button"
               >
                 <Text className="text-gray-500 text-sm">
                   ¿No tienes cuenta?{' '}
@@ -136,6 +167,6 @@ export default function LoginScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }

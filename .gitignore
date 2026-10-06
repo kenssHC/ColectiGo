@@ -10,3 +10,5 @@ build/
 coverage/
 .turbo/
 package-lock.json
+apps/backend/src/seeds/data/*
+!apps/backend/src/seeds/data/.gitkeep

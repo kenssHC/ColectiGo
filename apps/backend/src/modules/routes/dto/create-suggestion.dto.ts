@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import type { SuggestionType } from '@collectigo/shared';
 
 export class CreateSuggestionDto {
@@ -6,6 +6,7 @@ export class CreateSuggestionDto {
   type: SuggestionType;
 
   @IsString()
-  @IsOptional()
+  @IsNotEmpty()
+  @MaxLength(1000)
   description: string;
 }

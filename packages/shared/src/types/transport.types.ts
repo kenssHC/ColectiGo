@@ -1,6 +1,9 @@
-export type VehicleType = 'colectivo' | 'auto' | 'bus';
+export type VehicleType = 'colectivo' | 'auto' | 'combi' | 'bus';
 
 export type RouteStepType = 'walk' | 'board' | 'ride' | 'transfer' | 'arrive';
+
+/** Sentido de un recorrido: de ida (inicio → fin) o de vuelta (fin → inicio). */
+export type RouteDirection = 'ida' | 'vuelta';
 
 export type PlannerMode = 'shortest' | 'fastest' | 'cheapest';
 

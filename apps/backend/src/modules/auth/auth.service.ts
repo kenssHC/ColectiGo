@@ -17,7 +17,8 @@ export class AuthService {
       return {
         uid: decoded.uid,
         email: decoded.email ?? '',
-        name: decoded.name ?? '',
+        name: (decoded.name as string | undefined) ?? '',
+        isAdmin: decoded.admin === true,
       };
     } catch (error) {
       this.logger.warn('Token de Firebase inválido', error);
@@ -34,12 +35,19 @@ export class AuthService {
     const clientEmail = this.configService.get<string>('firebase.clientEmail');
     const privateKey = this.configService.get<string>('firebase.privateKey');
 
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId,
-        clientEmail,
-        privateKey,
-      }),
-    });
+    try {
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId,
+          clientEmail,
+          privateKey,
+        }),
+      });
+    } catch (error) {
+      throw new Error(
+        'No se pudo inicializar Firebase Admin. Revisa FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL y FIREBASE_PRIVATE_KEY en el archivo .env. ' +
+          `Detalle: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 }

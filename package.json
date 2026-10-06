@@ -2,9 +2,12 @@
   "name": "collectigo",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "pnpm@10.32.1",
   "scripts": {
     "backend": "pnpm --filter backend dev",
-    "mobile": "pnpm --filter mobile start",
+    "mobile": "pnpm --filter mobile start:dev",
+    "mobile:go": "pnpm --filter mobile start:go",
+    "mobile:android": "pnpm --filter mobile android",
     "lint": "pnpm -r lint",
     "build": "pnpm -r build"
   },

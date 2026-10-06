@@ -11,6 +11,7 @@ ColectiGO/
 │   └── backend/    # NestJS + TypeScript
 ├── packages/
 │   └── shared/     # Tipos e interfaces compartidas
+├── docker-compose.yml
 ├── pnpm-workspace.yaml
 └── package.json
 ```
@@ -19,9 +20,8 @@ ColectiGO/
 
 - Node.js 20+
 - pnpm 10+
-- PostgreSQL 15+ con extensión PostGIS
-- Cuenta de Firebase con Authentication habilitado
-- API Key de Google Maps Platform
+- Docker (opcional, para PostgreSQL local) o PostgreSQL 15+
+- Cuenta de Firebase con Authentication (Email/Password) habilitado
 
 ## Configuración
 
@@ -31,77 +31,140 @@ ColectiGO/
 pnpm install
 ```
 
-### 2. Configurar variables de entorno del backend
+### 2. Levantar PostgreSQL (recomendado)
+
+```bash
+docker compose up -d
+```
+
+Esto crea el contenedor `collectigo-postgres` con usuario/contraseña `postgres` y base `collectigo`.
+
+### 3. Configurar variables de entorno del backend
 
 ```bash
 cp apps/backend/.env.example apps/backend/.env
 ```
 
-Edita `apps/backend/.env` con tus credenciales reales:
+| Variable | Descripción |
+|---|---|
+| `DATABASE_*` | Conexión a PostgreSQL |
+| `FIREBASE_PROJECT_ID` | ID del proyecto en Firebase Console |
+| `FIREBASE_CLIENT_EMAIL` | Client email del service account |
+| `FIREBASE_PRIVATE_KEY` | Private key del service account (con `\n` escapados) |
+| `CORS_ORIGINS` | Orígenes permitidos separados por coma (`*` solo en desarrollo) |
+
+El backend valida las credenciales de Firebase al arrancar.
+
+### 4. Migraciones e importación de rutas
+
+```bash
+pnpm --filter backend migration:run
+pnpm --filter backend seed   # importa las rutas desde apps/backend/src/seeds/data/*.geojson
+```
+
+El esquema se gestiona exclusivamente con migraciones (`synchronize` está desactivado).
+
+Las rutas reales se cargan desde archivos GeoJSON (uno o más `Feature` de tipo
+`LineString`, por ejemplo trazados en [geojson.io](https://geojson.io)) con estas
+`properties`: `empresa`, `codigo_empresa` (único, ej. TR-0024), `flota`,
+`tipo` (ej. TA-11; el prefijo define el vehículo: TA=colectivo, TC=combi, TM=bus),
+`tarifa`, `paradero_inicio`, `paradero_fin`, `direccion` (`ida` o `vuelta`,
+opcionalmente `con bifurcación`) e `imagen` (URL opcional de la foto del vehículo).
+El importador es idempotente: puede ejecutarse varias veces y reemplaza los
+recorridos existentes. No hay paraderos intermedios: los pasajeros suben y bajan
+en cualquier punto del recorrido, y el planner calcula el punto exacto.
+
+### 5. Configurar variables de entorno del mobile
+
+```bash
+cp apps/mobile/.env.example apps/mobile/.env
+```
 
 | Variable | Descripción |
 |---|---|
-| `DATABASE_HOST` | Host de PostgreSQL |
-| `DATABASE_PORT` | Puerto de PostgreSQL (por defecto 5432) |
-| `DATABASE_USER` | Usuario de PostgreSQL |
-| `DATABASE_PASSWORD` | Contraseña de PostgreSQL |
-| `DATABASE_NAME` | Nombre de la base de datos |
-| `FIREBASE_PROJECT_ID` | ID del proyecto en Firebase Console |
-| `FIREBASE_CLIENT_EMAIL` | Client email del service account de Firebase |
-| `FIREBASE_PRIVATE_KEY` | Private key del service account de Firebase |
-| `GOOGLE_MAPS_API_KEY` | API Key de Google Maps Platform |
+| `EXPO_PUBLIC_API_URL` | URL del backend. En dispositivo físico usa la IP LAN (ej. `http://192.168.1.10:3000/api/v1`) |
+| `EXPO_PUBLIC_FIREBASE_*` | Configuración web de Firebase (Consola → Configuración del proyecto → Tus apps) |
 
-### 3. Configurar variables de entorno del mobile
+### 6. Google Maps y development build
 
-Crea `apps/mobile/.env`:
+El mapa usa `react-native-maps`. Google Maps ya no funciona dentro de Expo Go
+para Android, por lo que el desarrollo de las pantallas de mapas requiere un
+development build propio.
 
-```
-EXPO_PUBLIC_API_URL=http://localhost:3000/api/v1
-```
-
-### 4. Configurar Google Maps en la app
-
-Agrega tu API Key en `apps/mobile/app.json` en los campos:
-- `expo.ios.config.googleMapsApiKey`
-- `expo.android.config.googleMaps.apiKey`
-
-### 5. Configurar Firebase en la app
-
-Descarga el archivo `google-services.json` desde Firebase Console y colócalo en `apps/mobile/`.
-
-## Desarrollo
-
-### Iniciar el backend
+Agrega la clave de Android a `apps/mobile/.env` (este archivo está ignorado por Git):
 
 ```bash
-pnpm backend
+GOOGLE_MAPS_API_KEY=tu_clave
 ```
 
-El servidor corre en `http://localhost:3000`
+La clave debe tener habilitado **Maps SDK for Android** y estar restringida al
+package `com.collectigo.app` y al SHA-1 del certificado que firma el build.
+`apps/mobile/app.config.js` la entrega al plugin nativo de `react-native-maps`.
 
-### Iniciar la app mobile
+Para compilar e instalar localmente en un dispositivo conectado por USB:
+
+```bash
+pnpm mobile:android
+```
+
+Después del primer build, los cambios JavaScript/TypeScript no requieren recompilar:
 
 ```bash
 pnpm mobile
 ```
 
-Escanea el QR con Expo Go o ejecuta en un emulador.
+Para crear un APK de desarrollo en EAS se usa el perfil `development` definido en
+`apps/mobile/eas.json`. La variable `GOOGLE_MAPS_API_KEY` debe existir también en
+el entorno `development` de EAS.
 
-## Base de datos
+## Desarrollo
 
-El backend utiliza TypeORM con `synchronize: true` en modo desarrollo, lo que crea las tablas automáticamente al iniciar. En producción se deben usar migraciones.
+```bash
+pnpm backend   # API en http://localhost:3000
+pnpm mobile          # Metro para el development build instalado
+pnpm mobile:android  # compila e instala el development build local
+pnpm mobile:go       # Expo Go, solo para funciones que no dependan de Google Maps
+```
+
+Si editas `packages/shared`, recompílalo para que la app (Metro) y `nest build` vean los cambios:
+
+```bash
+pnpm --filter @collectigo/shared build
+```
+
+## Pruebas
+
+```bash
+pnpm --filter backend test       # unitarias
+pnpm --filter backend test:e2e   # e2e ligeras (sin BD)
+```
+
+CI corre automáticamente en GitHub Actions (`.github/workflows/ci.yml`).
+
+## Roles de administrador
+
+Crear rutas y moderar sugerencias requieren el custom claim `admin` en Firebase:
+
+```js
+admin.auth().setCustomUserClaims(uid, { admin: true });
+```
 
 ## Endpoints principales
 
-| Método | Ruta | Descripción |
-|---|---|---|
-| `POST` | `/api/v1/users/sync` | Sincroniza usuario de Firebase con la base de datos |
-| `GET` | `/api/v1/users/me` | Obtiene el perfil del usuario autenticado |
-| `GET` | `/api/v1/routes` | Lista todas las rutas activas |
-| `GET` | `/api/v1/routes/:id` | Obtiene una ruta por ID |
-| `POST` | `/api/v1/routes` | Crea una ruta de transporte |
-| `POST` | `/api/v1/routes/:id/suggestions` | Envía una sugerencia de corrección |
-| `POST` | `/api/v1/planner/calculate` | Calcula las rutas entre dos puntos |
+Todos con prefijo `/api/v1`. Las respuestas de error incluyen `requestId` (`X-Request-Id`).
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| `GET` | `/health` | — | Health check (sin rate limit) |
+| `POST` | `/users/sync` | Token | Crea/recupera el usuario a partir del token |
+| `GET` | `/users/me` | Token | Perfil del usuario autenticado |
+| `GET` | `/routes` | — | Lista rutas activas (con paradas) |
+| `GET` | `/routes/:id` | — | Ruta por ID |
+| `POST` | `/routes` | Token + admin | Crea una ruta de transporte |
+| `POST` | `/routes/:id/suggestions` | Token | Envía una sugerencia de corrección |
+| `GET` | `/routes/suggestions/mine` | Token | Sugerencias del usuario autenticado |
+| `PATCH` | `/routes/suggestions/:id` | Token + admin | Aprueba o rechaza una sugerencia |
+| `POST` | `/planner/calculate` | — | Calcula rutas entre dos puntos (20 req/min) |
 
 ### Ejemplo: Calcular ruta
 
@@ -113,4 +176,9 @@ POST /api/v1/planner/calculate
 }
 ```
 
-La respuesta incluye tres opciones: `shortest` (más corta), `fastest` (menos tiempo) y `cheapest` (más barata), cada una con pasos detallados.
+La respuesta incluye la mejor opción (`best`) según un puntaje que combina tiempo,
+costo y distancia, más una lista de `alternatives` ordenadas. Si el destino está
+cerca (< 2.5 km), se evalúa también la opción de ir caminando. Las caminatas se
+trazan por las calles (OSRM/OpenStreetMap) y, si se configura `GOOGLE_MAPS_API_KEY`
+en el backend, la duración del tramo en vehículo usa tráfico en tiempo real
+(Google Routes API); sin key se estima con un factor de hora punta.

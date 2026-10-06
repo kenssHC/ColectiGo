@@ -7,15 +7,19 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
-import { localAuthService } from '../../src/services/local-auth.service';
+import { ErrorBanner } from '../../src/components/ui/ErrorBanner';
+import { authService, getAuthErrorMessage } from '../../src/services/auth.service';
 import { useAuthStore } from '../../src/stores/auth.store';
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function RegisterScreen() {
+  const insets = useSafeAreaInsets();
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -28,7 +32,7 @@ export default function RegisterScreen() {
   function validate(): string | null {
     if (!displayName.trim()) return 'Ingresa tu nombre completo';
     if (!email.trim()) return 'Ingresa tu correo electrónico';
-    if (!email.includes('@')) return 'El correo electrónico no es válido';
+    if (!EMAIL_PATTERN.test(email.trim())) return 'El correo electrónico no es válido';
     if (!password) return 'Crea una contraseña';
     if (password.length < 6) return 'La contraseña debe tener al menos 6 caracteres';
     if (password !== confirmPassword) return 'Las contraseñas no coinciden';
@@ -44,18 +48,18 @@ export default function RegisterScreen() {
     setIsLoading(true);
     setErrorMessage('');
     try {
-      const user = await localAuthService.register(email, password, displayName);
+      const user = await authService.register(email, password, displayName);
       setUser(user);
       router.replace('/(tabs)/map');
-    } catch {
-      setErrorMessage('No se pudo crear la cuenta. Intenta nuevamente');
+    } catch (err) {
+      setErrorMessage(getAuthErrorMessage(err, 'No se pudo crear la cuenta. Intenta nuevamente'));
     } finally {
       setIsLoading(false);
     }
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <View className="flex-1 bg-white" style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}>
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -69,6 +73,9 @@ export default function RegisterScreen() {
             <TouchableOpacity
               className="w-9 h-9 rounded-full bg-gray-100 items-center justify-center"
               onPress={() => router.back()}
+              accessibilityRole="button"
+              accessibilityLabel="Volver"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Ionicons name="arrow-back-outline" size={18} color="#374151" />
             </TouchableOpacity>
@@ -124,12 +131,7 @@ export default function RegisterScreen() {
                 secureTextEntry
               />
 
-              {errorMessage ? (
-                <View className="flex-row items-center gap-2 bg-red-50 rounded-xl px-3 py-2.5 border border-red-100">
-                  <Ionicons name="alert-circle-outline" size={16} color="#DC2626" />
-                  <Text className="text-red-600 text-sm flex-1">{errorMessage}</Text>
-                </View>
-              ) : null}
+              {errorMessage ? <ErrorBanner message={errorMessage} /> : null}
             </View>
 
             <View className="gap-3">
@@ -140,7 +142,11 @@ export default function RegisterScreen() {
                 size="lg"
               />
 
-              <TouchableOpacity className="py-3 items-center" onPress={() => router.back()}>
+              <TouchableOpacity
+                className="py-3 items-center"
+                onPress={() => router.back()}
+                accessibilityRole="button"
+              >
                 <Text className="text-gray-500 text-sm">
                   ¿Ya tienes cuenta?{' '}
                   <Text className="text-blue-700 font-semibold">Ingresar</Text>
@@ -150,6 +156,6 @@ export default function RegisterScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }

@@ -1,14 +1,9 @@
-import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
-
-export class CreateUserDto {
-  @IsString()
-  @IsNotEmpty()
+/**
+ * Datos internos para crear un usuario a partir del token de Firebase.
+ * No es entrada HTTP: el endpoint /users/sync deriva todo del token verificado.
+ */
+export interface CreateUserDto {
   firebaseUid: string;
-
-  @IsString()
-  @IsNotEmpty()
   displayName: string;
-
-  @IsEmail()
   email: string;
 }

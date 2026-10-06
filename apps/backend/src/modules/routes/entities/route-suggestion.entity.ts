@@ -2,6 +2,8 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
+  JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -34,9 +36,19 @@ export class RouteSuggestion {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
-  @ManyToOne('UserEntity', (user: UserEntity) => user.suggestions)
+  @Index()
+  @ManyToOne('UserEntity', (user: UserEntity) => user.suggestions, {
+    nullable: false,
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'user_id' })
   user: UserEntity;
 
-  @ManyToOne('RouteEntity', (route: RouteEntity) => route.suggestions)
+  @Index()
+  @ManyToOne('RouteEntity', (route: RouteEntity) => route.suggestions, {
+    nullable: false,
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'route_id' })
   route: RouteEntity;
 }

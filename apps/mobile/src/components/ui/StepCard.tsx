@@ -1,6 +1,7 @@
 import { View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { RouteStep } from '@collectigo/shared';
+import { formatDistance, formatDuration } from '../../utils/format';
 
 interface StepCardProps {
   step: RouteStep;
@@ -47,6 +48,7 @@ const STEP_CONFIG: Record<
 const VEHICLE_LABEL: Record<string, string> = {
   colectivo: 'Colectivo',
   auto: 'Auto',
+  combi: 'Combi',
   bus: 'Bus',
 };
 
@@ -87,16 +89,10 @@ export function StepCard({ step, index, isLast }: StepCardProps) {
 
         <View className="flex-row gap-3 mt-1.5">
           {step.distance !== undefined ? (
-            <Text className="text-xs text-gray-400">
-              {step.distance >= 1000
-                ? `${(step.distance / 1000).toFixed(1)} km`
-                : `${step.distance} m`}
-            </Text>
+            <Text className="text-xs text-gray-400">{formatDistance(step.distance)}</Text>
           ) : null}
           {step.duration !== undefined ? (
-            <Text className="text-xs text-gray-400">
-              {step.duration < 60 ? `${step.duration}s` : `${Math.round(step.duration / 60)} min`}
-            </Text>
+            <Text className="text-xs text-gray-400">{formatDuration(step.duration)}</Text>
           ) : null}
           {step.fare !== undefined ? (
             <Text className="text-xs font-semibold text-green-600">S/ {step.fare.toFixed(2)}</Text>

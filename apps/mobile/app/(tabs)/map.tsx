@@ -1,45 +1,37 @@
-import { useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { MapPlaceholder } from '../../src/components/map/MapPlaceholder';
+import { SelectionMap } from '../../src/components/map/SelectionMap';
 import { Button } from '../../src/components/ui/Button';
+import { ErrorBanner } from '../../src/components/ui/ErrorBanner';
 import { usePlannerStore } from '../../src/stores/planner.store';
 import { useLocation } from '../../src/hooks/useLocation';
 import { useRouteSearch } from '../../src/hooks/useRouteSearch';
-import { HUANCAYO_CENTER } from '../../src/data/mock.data';
 import type { LatLng } from '@collectigo/shared';
 
-type SelectionStep = 'idle' | 'origin' | 'destination';
-
 export default function MapScreen() {
-  const { location } = useLocation();
+  const insets = useSafeAreaInsets();
+  const { location, errorMessage: locationNotice } = useLocation();
   const { origin, destination, setOrigin, setDestination, reset, isCalculating } =
     usePlannerStore();
-  const { canSearch, search } = useRouteSearch();
-  const [selectionStep, setSelectionStep] = useState<SelectionStep>('idle');
+  const { canSearch, search, errorMessage: searchError } = useRouteSearch();
 
-  function handleSelectOrigin(): void {
-    setOrigin(location ?? HUANCAYO_CENTER);
-    setSelectionStep('destination');
+  function handleUseCurrentLocation(): void {
+    if (location) {
+      setOrigin(location);
+    }
   }
 
-  function handleSelectDestination(): void {
-    const mockDest: LatLng = {
-      lat: (location?.lat ?? HUANCAYO_CENTER.lat) - 0.015,
-      lng: (location?.lng ?? HUANCAYO_CENTER.lng) - 0.012,
-    };
-    setDestination(mockDest);
-    setSelectionStep('idle');
-  }
-
-  function handleReset(): void {
-    reset();
-    setSelectionStep('idle');
+  function handleMapSelect(coordinate: LatLng): void {
+    if (!origin) {
+      setOrigin(coordinate);
+    } else {
+      setDestination(coordinate);
+    }
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={['top']}>
+    <View className="flex-1 bg-white" style={{ paddingTop: insets.top }}>
       <View className="px-4 py-3 flex-row items-center justify-between border-b border-gray-100">
         <View className="flex-row items-center gap-2">
           <View className="w-8 h-8 bg-blue-700 rounded-xl items-center justify-center">
@@ -59,11 +51,12 @@ export default function MapScreen() {
         </Text>
 
         <TouchableOpacity
-          className={`flex-row items-center gap-3 bg-gray-50 rounded-xl px-4 py-3 border ${
-            selectionStep === 'origin' ? 'border-blue-400 bg-blue-50' : 'border-gray-100'
+          className={`flex-row items-center gap-3 rounded-xl px-4 py-3 border ${
+            origin ? 'bg-gray-50 border-gray-100' : 'bg-blue-50 border-blue-200'
           }`}
-          onPress={handleSelectOrigin}
-          disabled={!!origin}
+          onPress={handleUseCurrentLocation}
+          accessibilityRole="button"
+          accessibilityLabel="Usar mi ubicación actual como origen"
         >
           <View className="w-8 h-8 rounded-full bg-blue-700 items-center justify-center">
             <Text className="text-white font-bold text-xs">A</Text>
@@ -71,28 +64,26 @@ export default function MapScreen() {
           <View className="flex-1">
             <Text className="text-xs text-gray-400 mb-0.5">Origen</Text>
             <Text
-              className={`text-sm font-medium ${origin ? 'text-gray-800' : 'text-gray-400'}`}
+              className={`text-sm font-medium ${origin ? 'text-gray-800' : 'text-gray-500'}`}
               numberOfLines={1}
             >
               {origin
                 ? `${origin.lat.toFixed(4)}, ${origin.lng.toFixed(4)}`
-                : 'Toca para usar tu ubicación actual'}
+                : 'Toca aquí para usar tu ubicación, o toca el mapa'}
             </Text>
           </View>
           {origin ? (
             <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
           ) : (
-            <Ionicons name="locate-outline" size={18} color="#9CA3AF" />
+            <Ionicons name="locate-outline" size={18} color="#1D4ED8" />
           )}
         </TouchableOpacity>
 
         {origin && (
-          <TouchableOpacity
-            className={`flex-row items-center gap-3 bg-gray-50 rounded-xl px-4 py-3 border ${
-              selectionStep === 'destination' ? 'border-red-400 bg-red-50' : 'border-gray-100'
+          <View
+            className={`flex-row items-center gap-3 rounded-xl px-4 py-3 border ${
+              destination ? 'bg-gray-50 border-gray-100' : 'bg-red-50 border-red-200'
             }`}
-            onPress={handleSelectDestination}
-            disabled={!!destination}
           >
             <View className="w-8 h-8 rounded-full bg-red-600 items-center justify-center">
               <Text className="text-white font-bold text-xs">B</Text>
@@ -100,35 +91,41 @@ export default function MapScreen() {
             <View className="flex-1">
               <Text className="text-xs text-gray-400 mb-0.5">Destino</Text>
               <Text
-                className={`text-sm font-medium ${destination ? 'text-gray-800' : 'text-gray-400'}`}
+                className={`text-sm font-medium ${destination ? 'text-gray-800' : 'text-gray-500'}`}
                 numberOfLines={1}
               >
                 {destination
                   ? `${destination.lat.toFixed(4)}, ${destination.lng.toFixed(4)}`
-                  : 'Toca para seleccionar destino'}
+                  : 'Toca el mapa para elegir tu destino'}
               </Text>
             </View>
             {destination ? (
               <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
             ) : (
-              <Ionicons name="location-outline" size={18} color="#9CA3AF" />
+              <Ionicons name="location-outline" size={18} color="#DC2626" />
             )}
-          </TouchableOpacity>
+          </View>
         )}
 
         {(origin || destination) && (
           <TouchableOpacity
             className="flex-row items-center gap-1 self-end py-1"
-            onPress={handleReset}
+            onPress={reset}
+            accessibilityRole="button"
+            accessibilityLabel="Limpiar puntos seleccionados"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Ionicons name="trash-outline" size={13} color="#9CA3AF" />
             <Text className="text-xs text-gray-400">Limpiar puntos</Text>
           </TouchableOpacity>
         )}
+
+        {locationNotice ? <ErrorBanner message={locationNotice} variant="info" /> : null}
+        {searchError ? <ErrorBanner message={searchError} /> : null}
       </View>
 
       <View className="flex-1">
-        <MapPlaceholder origin={origin} destination={destination} />
+        <SelectionMap origin={origin} destination={destination} onSelect={handleMapSelect} />
       </View>
 
       {canSearch && (
@@ -142,6 +139,6 @@ export default function MapScreen() {
           />
         </View>
       )}
-    </SafeAreaView>
+    </View>
   );
 }

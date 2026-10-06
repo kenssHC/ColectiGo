@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import * as Location from 'expo-location';
 import type { LatLng } from '@collectigo/shared';
-import { HUANCAYO_CENTER } from '../data/mock.data';
+import { HUANCAYO_CENTER } from '../constants/locations';
 
 interface UseLocationResult {
   location: LatLng | null;
@@ -23,7 +23,7 @@ export function useLocation(): UseLocationResult {
       if (status !== 'granted') {
         if (active) {
           setLocation(HUANCAYO_CENTER);
-          setErrorMessage('Usando ubicación predeterminada: Huancayo');
+          setErrorMessage('Sin permiso de ubicación: usando el centro de Huancayo como origen');
           setIsLoading(false);
         }
         return;
@@ -45,7 +45,7 @@ export function useLocation(): UseLocationResult {
     requestLocation().catch(() => {
       if (active) {
         setLocation(HUANCAYO_CENTER);
-        setErrorMessage('Usando ubicación predeterminada: Huancayo');
+        setErrorMessage('No se pudo obtener tu ubicación: usando el centro de Huancayo');
         setIsLoading(false);
       }
     });

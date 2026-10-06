@@ -6,13 +6,12 @@
     "strictNullChecks": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "baseUrl": ".",
     "paths": {
       "@collectigo/shared": [
         "../../packages/shared/src/index.ts"
       ],
       "@/*": [
-        "src/*"
+        "./src/*"
       ]
     }
   },

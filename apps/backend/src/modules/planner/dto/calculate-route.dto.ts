@@ -1,11 +1,15 @@
-import { IsNumber, ValidateNested } from 'class-validator';
+import { IsNumber, Max, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class LatLngDto {
   @IsNumber()
+  @Min(-90)
+  @Max(90)
   lat: number;
 
   @IsNumber()
+  @Min(-180)
+  @Max(180)
   lng: number;
 }
 

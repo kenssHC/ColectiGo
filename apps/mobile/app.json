@@ -7,17 +7,9 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "scheme": "collectigo",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#1D4ED8"
-    },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.collectigo.app",
-      "config": {
-        "googleMapsApiKey": ""
-      }
+      "bundleIdentifier": "com.collectigo.app"
     },
     "android": {
       "package": "com.collectigo.app",
@@ -26,11 +18,6 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      },
-      "config": {
-        "googleMaps": {
-          "apiKey": ""
-        }
       },
       "permissions": [
         "ACCESS_FINE_LOCATION",
@@ -49,10 +36,25 @@
           "locationAlwaysAndWhenInUsePermission": "ColectiGO necesita tu ubicación para mostrarte las rutas cercanas."
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#1D4ED8"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1cc98631-cdf2-4f18-87d2-6937b1569d52"
+      }
+    },
+    "owner": "kaizen321"
   }
 }
