@@ -1,10 +1,11 @@
 import { Platform } from 'react-native';
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactElement } from 'react';
 import type { LatLng } from '@collectigo/shared';
 import type * as ReactNativeMaps from 'react-native-maps';
 import type { MapMarkerProps, MapViewProps } from 'react-native-maps';
 import { HUANCAYO_CENTER } from '../../constants/locations';
 import { MapPlaceholder } from './MapPlaceholder';
+import { colors } from '../../theme/tokens';
 
 interface SelectionMapProps {
   origin: LatLng | null;
@@ -20,7 +21,7 @@ if (Platform.OS !== 'web') {
   maps = require('react-native-maps') as MapsModule;
 }
 
-export function SelectionMap({ origin, destination, onSelect }: SelectionMapProps) {
+export function SelectionMap({ origin, destination, onSelect }: SelectionMapProps): ReactElement {
   if (!maps) {
     return <MapPlaceholder origin={origin} destination={destination} onSelect={onSelect} />;
   }
@@ -48,19 +49,20 @@ export function SelectionMap({ origin, destination, onSelect }: SelectionMapProp
       }
       showsUserLocation
       showsMyLocationButton
+      accessibilityLabel="Mapa para seleccionar origen y destino"
     >
       {origin ? (
         <Marker
           coordinate={{ latitude: origin.lat, longitude: origin.lng }}
           title="Origen"
-          pinColor="#1D4ED8"
+          pinColor={colors.primary}
         />
       ) : null}
       {destination ? (
         <Marker
           coordinate={{ latitude: destination.lat, longitude: destination.lng }}
           title="Destino"
-          pinColor="#DC2626"
+          pinColor={colors.destination}
         />
       ) : null}
     </MapView>

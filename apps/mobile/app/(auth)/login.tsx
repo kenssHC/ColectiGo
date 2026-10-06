@@ -7,6 +7,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -16,14 +17,17 @@ import { Input } from '../../src/components/ui/Input';
 import { ErrorBanner } from '../../src/components/ui/ErrorBanner';
 import { authService, getAuthErrorMessage } from '../../src/services/auth.service';
 import { useAuthStore } from '../../src/stores/auth.store';
+import { colors } from '../../src/theme/tokens';
+import type { ReactElement } from 'react';
 
-export default function LoginScreen() {
+export default function LoginScreen(): ReactElement {
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
 
   const { setUser } = useAuthStore();
 
@@ -50,6 +54,8 @@ export default function LoginScreen() {
       setErrorMessage('Escribe tu correo para enviarte el enlace de recuperación');
       return;
     }
+    setIsResettingPassword(true);
+    setErrorMessage('');
     try {
       await authService.sendPasswordReset(email);
       Alert.alert(
@@ -58,11 +64,16 @@ export default function LoginScreen() {
       );
     } catch (error) {
       setErrorMessage(getAuthErrorMessage(error, 'No se pudo enviar el correo de recuperación'));
+    } finally {
+      setIsResettingPassword(false);
     }
   }
 
   return (
-    <View className="flex-1 bg-white" style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}>
+    <View
+      className="flex-1 bg-white"
+      style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
+    >
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -104,6 +115,7 @@ export default function LoginScreen() {
                 <Text className="text-sm font-medium text-gray-700">Contraseña</Text>
                 <View className="relative">
                   <Input
+                    accessibilityLabel="Contraseña"
                     placeholder="••••••••"
                     value={password}
                     onChangeText={(t) => {
@@ -116,27 +128,30 @@ export default function LoginScreen() {
                     className="absolute right-3 top-3.5"
                     onPress={() => setShowPassword((v) => !v)}
                     accessibilityRole="button"
-                    accessibilityLabel={
-                      showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'
-                    }
+                    accessibilityLabel={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
                     <Ionicons
                       name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                       size={20}
-                      color="#9CA3AF"
+                      color={colors.textMuted}
                     />
                   </TouchableOpacity>
                 </View>
               </View>
 
               <TouchableOpacity
-                className="self-end"
+                className="self-end min-h-11 px-1 flex-row items-center justify-center gap-2"
                 onPress={handleForgotPassword}
+                disabled={isResettingPassword}
                 accessibilityRole="button"
+                accessibilityState={{ busy: isResettingPassword, disabled: isResettingPassword }}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Text className="text-blue-700 text-sm font-medium">
+                {isResettingPassword ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : null}
+                <Text className="text-blue-700 text-sm font-semibold">
                   ¿Olvidaste tu contraseña?
                 </Text>
               </TouchableOpacity>
@@ -145,11 +160,17 @@ export default function LoginScreen() {
             </View>
 
             <View className="gap-3">
-              <Button label="Ingresar" onPress={handleLogin} isLoading={isLoading} size="lg" />
+              <Button
+                label="Ingresar"
+                loadingLabel="Ingresando…"
+                onPress={handleLogin}
+                isLoading={isLoading}
+                size="lg"
+              />
 
               <View className="flex-row items-center gap-3">
                 <View className="flex-1 h-px bg-gray-100" />
-                <Text className="text-gray-400 text-xs">o</Text>
+                <Text className="text-slate-500 text-xs">o</Text>
                 <View className="flex-1 h-px bg-gray-100" />
               </View>
 
@@ -159,8 +180,7 @@ export default function LoginScreen() {
                 accessibilityRole="button"
               >
                 <Text className="text-gray-500 text-sm">
-                  ¿No tienes cuenta?{' '}
-                  <Text className="text-blue-700 font-semibold">Regístrate</Text>
+                  ¿No tienes cuenta? <Text className="text-blue-700 font-semibold">Regístrate</Text>
                 </Text>
               </TouchableOpacity>
             </View>

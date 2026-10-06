@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentType, ReactElement, RefAttributes } from 'react';
 import { Platform, View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { LatLng, PlannerResult } from '@collectigo/shared';
 import type * as ReactNativeMaps from 'react-native-maps';
 import type { MapMarkerProps, MapPolylineProps, MapViewProps } from 'react-native-maps';
+import { colors, mapPathColors, shadows } from '../../theme/tokens';
 
 interface ResultMapProps {
   result: PlannerResult;
@@ -24,7 +25,7 @@ if (Platform.OS !== 'web') {
 interface MapPath {
   path: LatLng[];
   color: string;
-  dashed: boolean;
+  kind: 'ride' | 'walk';
 }
 
 interface TripMarker {
@@ -55,14 +56,14 @@ function extractGeometry(result: PlannerResult, fallbackRideColor: string): Trip
     if (path.length >= 2 && ['walk', 'transfer', 'arrive'].includes(step.type)) {
       paths.push({
         path,
-        color: step.type === 'transfer' ? '#9333EA' : '#9CA3AF',
-        dashed: true,
+        color: mapPathColors.walkCenter,
+        kind: 'walk',
       });
     }
 
     if (step.type === 'ride') {
       const color = step.routeColor ?? fallbackRideColor;
-      if (path.length >= 2) paths.push({ path, color, dashed: false });
+      if (path.length >= 2) paths.push({ path, color, kind: 'ride' });
       if (step.from) {
         markers.push({
           coordinate: step.from,
@@ -144,7 +145,7 @@ export function ResultMap({ result, rideColor }: ResultMapProps): ReactElement |
     if (Platform.OS === 'web' && result.steps.length > 0) {
       return (
         <View className="h-24 mx-4 mt-3 rounded-2xl bg-slate-100 items-center justify-center">
-          <Text className="text-xs text-gray-400">
+          <Text className="text-xs text-slate-600">
             El mapa del recorrido está disponible en Android o iOS
           </Text>
         </View>
@@ -174,19 +175,49 @@ export function ResultMap({ result, rideColor }: ResultMapProps): ReactElement |
         rotateEnabled={false}
         pitchEnabled={false}
         toolbarEnabled={false}
+        accessibilityLabel="Mapa del recorrido seleccionado"
       >
-        {geometry.paths.map((segment, index) => (
-          <Polyline
-            key={`path-${index}`}
-            coordinates={segment.path.map(toCoord)}
-            strokeColor={segment.color}
-            strokeWidth={segment.dashed ? 3 : 4}
-            {...(segment.dashed ? { lineDashPattern: [6, 6] } : {})}
-          />
-        ))}
+        {geometry.paths.map((segment, index) => {
+          const coordinates = segment.path.map(toCoord);
+          const isWalking = segment.kind === 'walk';
+
+          if (!isWalking) {
+            return (
+              <Polyline
+                key={`path-${index}`}
+                coordinates={coordinates}
+                strokeColor={segment.color}
+                strokeWidth={4}
+              />
+            );
+          }
+
+          return (
+            <Fragment key={`path-${index}`}>
+              <Polyline
+                coordinates={coordinates}
+                strokeColor={mapPathColors.walkOutline}
+                strokeWidth={7}
+                lineDashPattern={[8, 6]}
+                lineCap="round"
+                lineJoin="round"
+                zIndex={1}
+              />
+              <Polyline
+                coordinates={coordinates}
+                strokeColor={segment.color}
+                strokeWidth={3}
+                lineDashPattern={[8, 6]}
+                lineCap="round"
+                lineJoin="round"
+                zIndex={2}
+              />
+            </Fragment>
+          );
+        })}
 
         {geometry.origin ? (
-          <Marker coordinate={toCoord(geometry.origin)} title="Origen" pinColor="#1D4ED8" />
+          <Marker coordinate={toCoord(geometry.origin)} title="Origen" pinColor={colors.primary} />
         ) : null}
         {geometry.markers.map((marker, index) => (
           <Marker
@@ -197,19 +228,23 @@ export function ResultMap({ result, rideColor }: ResultMapProps): ReactElement |
           />
         ))}
         {geometry.destination ? (
-          <Marker coordinate={toCoord(geometry.destination)} title="Destino" pinColor="#DC2626" />
+          <Marker
+            coordinate={toCoord(geometry.destination)}
+            title="Destino"
+            pinColor={colors.destination}
+          />
         ) : null}
       </MapView>
 
       <TouchableOpacity
-        className="absolute bottom-3 right-3 w-10 h-10 rounded-full bg-white items-center justify-center shadow-md"
-        style={{ elevation: 4 }}
+        className="absolute bottom-3 right-3 w-12 h-12 rounded-full bg-white items-center justify-center"
+        style={shadows.floating}
         onPress={() => fitToTrip(true)}
         accessibilityRole="button"
         accessibilityLabel="Centrar el recorrido en el mapa"
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <Ionicons name="scan-outline" size={20} color="#374151" />
+        <Ionicons name="scan-outline" size={20} color={colors.textSecondary} />
       </TouchableOpacity>
     </View>
   );

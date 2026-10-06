@@ -4,20 +4,25 @@ import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, ActivityIndicator, Text } from 'react-native';
 import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import type { ReactElement } from 'react';
 import { useAuthListener } from '../src/hooks/useAuthListener';
 import { useAuthStore } from '../src/stores/auth.store';
 
-function LoadingScreen() {
+function LoadingScreen(): ReactElement {
   return (
-    <View className="flex-1 items-center justify-center bg-blue-700 gap-3">
-      <Text className="text-4xl font-bold text-white tracking-tight">ColectiGO</Text>
-      <Text className="text-blue-200 text-sm">Huancayo a tu ritmo</Text>
-      <ActivityIndicator size="large" color="rgba(255,255,255,0.6)" style={{ marginTop: 24 }} />
-    </View>
+    <>
+      <StatusBar style="light" />
+      <View className="flex-1 items-center justify-center bg-blue-700 gap-3">
+        <Text className="text-4xl font-bold text-white tracking-tight">ColectiGO</Text>
+        <Text className="text-blue-100 text-sm">Huancayo a tu ritmo</Text>
+        <ActivityIndicator size="large" color="white" style={{ marginTop: 24 }} />
+      </View>
+    </>
   );
 }
 
-export default function RootLayout() {
+export default function RootLayout(): ReactElement {
   useAuthListener();
   const { user, isLoading } = useAuthStore();
 
@@ -40,6 +45,7 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
+      <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false }} />
     </SafeAreaProvider>
   );

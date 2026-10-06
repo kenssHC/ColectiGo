@@ -1,7 +1,9 @@
 import { View, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import type { ReactElement } from 'react';
 import type { LatLng } from '@collectigo/shared';
 import { HUANCAYO_CENTER } from '../../constants/locations';
+import { colors } from '../../theme/tokens';
 
 interface MapPlaceholderProps {
   origin: LatLng | null;
@@ -13,7 +15,11 @@ interface MapPlaceholderProps {
  * Sustituto visual del mapa para plataformas sin react-native-maps (web).
  * Permite seleccionar origen/destino con toques en zonas aproximadas.
  */
-export function MapPlaceholder({ origin, destination, onSelect }: MapPlaceholderProps) {
+export function MapPlaceholder({
+  origin,
+  destination,
+  onSelect,
+}: MapPlaceholderProps): ReactElement {
   function handlePress(offsetLat: number, offsetLng: number): void {
     onSelect?.({
       lat: HUANCAYO_CENTER.lat + offsetLat,
@@ -48,9 +54,9 @@ export function MapPlaceholder({ origin, destination, onSelect }: MapPlaceholder
 
       <View className="absolute inset-0 items-center justify-center pointer-events-none">
         <View className="bg-white/90 rounded-2xl px-5 py-3 items-center gap-1">
-          <Ionicons name="map-outline" size={28} color="#6B7280" />
-          <Text className="text-sm font-medium text-gray-500">Mapa de Huancayo</Text>
-          <Text className="text-xs text-gray-400 text-center">
+          <Ionicons name="map-outline" size={28} color={colors.textSecondary} />
+          <Text className="text-sm font-medium text-slate-700">Mapa de Huancayo</Text>
+          <Text className="text-xs text-slate-600 text-center">
             {onSelect
               ? 'Toca el mapa para elegir origen o destino'
               : 'El mapa interactivo está disponible\nen Android o iOS'}

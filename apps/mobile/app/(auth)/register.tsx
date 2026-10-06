@@ -15,10 +15,12 @@ import { Input } from '../../src/components/ui/Input';
 import { ErrorBanner } from '../../src/components/ui/ErrorBanner';
 import { authService, getAuthErrorMessage } from '../../src/services/auth.service';
 import { useAuthStore } from '../../src/stores/auth.store';
+import type { ReactElement } from 'react';
+import { colors } from '../../src/theme/tokens';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export default function RegisterScreen() {
+export default function RegisterScreen(): ReactElement {
   const insets = useSafeAreaInsets();
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
@@ -59,7 +61,10 @@ export default function RegisterScreen() {
   }
 
   return (
-    <View className="flex-1 bg-white" style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}>
+    <View
+      className="flex-1 bg-white"
+      style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
+    >
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -71,13 +76,13 @@ export default function RegisterScreen() {
         >
           <View className="px-6 pt-6 pb-2 flex-row items-center gap-2">
             <TouchableOpacity
-              className="w-9 h-9 rounded-full bg-gray-100 items-center justify-center"
+              className="w-11 h-11 rounded-full bg-gray-100 items-center justify-center"
               onPress={() => router.back()}
               accessibilityRole="button"
               accessibilityLabel="Volver"
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="arrow-back-outline" size={18} color="#374151" />
+              <Ionicons name="arrow-back-outline" size={18} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -137,6 +142,7 @@ export default function RegisterScreen() {
             <View className="gap-3">
               <Button
                 label="Crear cuenta"
+                loadingLabel="Creando cuenta…"
                 onPress={handleRegister}
                 isLoading={isLoading}
                 size="lg"
@@ -148,8 +154,7 @@ export default function RegisterScreen() {
                 accessibilityRole="button"
               >
                 <Text className="text-gray-500 text-sm">
-                  ¿Ya tienes cuenta?{' '}
-                  <Text className="text-blue-700 font-semibold">Ingresar</Text>
+                  ¿Ya tienes cuenta? <Text className="text-blue-700 font-semibold">Ingresar</Text>
                 </Text>
               </TouchableOpacity>
             </View>

@@ -1,27 +1,37 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ReactElement } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
   Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import type { SuggestionType, TransportRoute } from '@collectigo/shared';
 import { Button } from '../../src/components/ui/Button';
 import { ErrorBanner } from '../../src/components/ui/ErrorBanner';
+import { Input } from '../../src/components/ui/Input';
+import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
+import { ScreenState } from '../../src/components/ui/ScreenState';
 import { routesService } from '../../src/services/routes.service';
 import { suggestionsService } from '../../src/services/suggestions.service';
-import type { SuggestionType, TransportRoute } from '@collectigo/shared';
+import { colors } from '../../src/theme/tokens';
 
 const MAX_DESCRIPTION_LENGTH = 1000;
 
-const TYPE_OPTIONS: Array<{ key: SuggestionType; label: string; icon: string }> = [
+const TYPE_OPTIONS: Array<{
+  key: SuggestionType;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}> = [
   { key: 'stop_position', label: 'Posición de parada', icon: 'location-outline' },
   { key: 'route_path', label: 'Recorrido', icon: 'git-branch-outline' },
   { key: 'fare', label: 'Tarifa', icon: 'cash-outline' },
@@ -29,7 +39,38 @@ const TYPE_OPTIONS: Array<{ key: SuggestionType; label: string; icon: string }> 
   { key: 'other', label: 'Otro', icon: 'ellipsis-horizontal-outline' },
 ];
 
-export default function NewSuggestionScreen() {
+interface RouteRowProps {
+  route: TransportRoute;
+  isSelected: boolean;
+  onPress: () => void;
+}
+
+function RouteRow({ route, isSelected, onPress }: RouteRowProps): ReactElement {
+  return (
+    <Pressable
+      className={`min-h-16 flex-row items-center gap-3 rounded-2xl px-4 py-3 border-2 ${
+        isSelected ? 'bg-blue-50 border-blue-700' : 'bg-white border-slate-200'
+      } active:opacity-80`}
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityLabel={`Ruta ${route.name}, ${route.type}, S/ ${route.fare.toFixed(2)}`}
+      accessibilityState={{ checked: isSelected }}
+    >
+      <View className="w-3 h-3 rounded-full" style={{ backgroundColor: route.color }} />
+      <View className="flex-1">
+        <Text className="text-sm font-bold text-slate-900" numberOfLines={1}>
+          {route.name}
+        </Text>
+        <Text className="text-xs text-slate-600 capitalize">
+          {route.type} · S/ {route.fare.toFixed(2)}
+        </Text>
+      </View>
+      {isSelected ? <Ionicons name="checkmark-circle" size={20} color={colors.primary} /> : null}
+    </Pressable>
+  );
+}
+
+export default function NewSuggestionScreen(): ReactElement {
   const insets = useSafeAreaInsets();
   const [routes, setRoutes] = useState<TransportRoute[]>([]);
   const [isLoadingRoutes, setIsLoadingRoutes] = useState(true);
@@ -38,31 +79,35 @@ export default function NewSuggestionScreen() {
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [routeQuery, setRouteQuery] = useState('');
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
 
-  useEffect(() => {
-    let active = true;
-
-    routesService
-      .getAll()
-      .then((data) => {
-        if (active) setRoutes(data);
-      })
-      .catch((error: unknown) => {
-        if (active) {
-          setErrorMessage(
-            error instanceof Error ? error.message : 'No se pudieron cargar las rutas',
-          );
-        }
-      })
-      .finally(() => {
-        if (active) setIsLoadingRoutes(false);
-      });
-
-    return () => {
-      active = false;
-    };
+  const loadRoutes = useCallback(async (): Promise<void> => {
+    setIsLoadingRoutes(true);
+    setErrorMessage(null);
+    try {
+      setRoutes(await routesService.getAll());
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'No se pudieron cargar las rutas');
+    } finally {
+      setIsLoadingRoutes(false);
+    }
   }, []);
 
+  useEffect(() => {
+    void loadRoutes();
+  }, [loadRoutes]);
+
+  const selectedRoute = routes.find((route) => route.id === routeId) ?? null;
+  const filteredRoutes = useMemo(() => {
+    const query = routeQuery.trim().toLocaleLowerCase('es');
+    if (!query) return routes;
+    return routes.filter(
+      (route) =>
+        route.name.toLocaleLowerCase('es').includes(query) ||
+        route.type.toLocaleLowerCase('es').includes(query),
+    );
+  }, [routeQuery, routes]);
   const canSubmit = routeId !== null && type !== null && description.trim().length > 0;
 
   async function handleSubmit(): Promise<void> {
@@ -78,156 +123,199 @@ export default function NewSuggestionScreen() {
       Alert.alert(
         'Sugerencia enviada',
         'Gracias por ayudar a mejorar las rutas. Revisaremos tu sugerencia pronto.',
-        [{ text: 'Entendido', onPress: () => router.back() }],
+        [{ text: 'Entendido', onPress: (): void => router.back() }],
       );
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : 'No se pudo enviar la sugerencia',
-      );
+      setErrorMessage(error instanceof Error ? error.message : 'No se pudo enviar la sugerencia');
     } finally {
       setIsSubmitting(false);
     }
   }
 
+  function selectRoute(route: TransportRoute): void {
+    setRouteId(route.id);
+    setIsPickerOpen(false);
+    setRouteQuery('');
+  }
+
   return (
-    <View className="flex-1 bg-gray-50" style={{ paddingTop: insets.top }}>
-      <View className="bg-white border-b border-gray-100 px-4 py-3 flex-row items-center gap-3">
-        <TouchableOpacity
-          className="w-9 h-9 rounded-full bg-gray-100 items-center justify-center"
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="Volver"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="arrow-back-outline" size={18} color="#374151" />
-        </TouchableOpacity>
-        <Text className="text-base font-bold text-gray-900 flex-1">Nueva sugerencia</Text>
-      </View>
+    <View className="flex-1 bg-slate-50" style={{ paddingTop: insets.top }}>
+      <ScreenHeader
+        title="Nueva sugerencia"
+        subtitle="Ayúdanos a mantener las rutas al día"
+        onBack={() => router.back()}
+      />
 
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
-          contentContainerStyle={{ padding: 16, gap: 20 }}
+          contentContainerStyle={{
+            padding: 16,
+            gap: 24,
+            paddingBottom: Math.max(insets.bottom, 24),
+          }}
           keyboardShouldPersistTaps="handled"
         >
-          {errorMessage ? <ErrorBanner message={errorMessage} /> : null}
+          {errorMessage ? (
+            <ErrorBanner
+              message={errorMessage}
+              {...(routes.length === 0
+                ? { actionLabel: 'Reintentar', onAction: () => void loadRoutes() }
+                : {})}
+            />
+          ) : null}
 
           <View className="gap-2">
-            <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-              1. ¿Sobre qué ruta?
-            </Text>
-            {isLoadingRoutes ? (
-              <View className="py-6 items-center">
-                <ActivityIndicator color="#1D4ED8" />
+            <Text className="text-sm font-bold text-slate-800">1. ¿Sobre qué ruta?</Text>
+            <Pressable
+              className="min-h-16 flex-row items-center gap-3 rounded-2xl px-4 py-3 border border-slate-300 bg-white active:bg-slate-50"
+              onPress={() => setIsPickerOpen(true)}
+              disabled={isLoadingRoutes || routes.length === 0}
+              accessibilityRole="button"
+              accessibilityLabel={
+                selectedRoute ? `Ruta seleccionada: ${selectedRoute.name}` : 'Seleccionar ruta'
+              }
+              accessibilityState={{ disabled: isLoadingRoutes || routes.length === 0 }}
+            >
+              <View
+                className="w-10 h-10 rounded-full bg-blue-50 items-center justify-center"
+                style={
+                  selectedRoute ? { borderWidth: 4, borderColor: selectedRoute.color } : undefined
+                }
+              >
+                <Ionicons name="bus-outline" size={20} color={colors.primary} />
               </View>
-            ) : routes.length === 0 ? (
-              <Text className="text-sm text-gray-400 py-4 text-center">
-                No hay rutas disponibles
-              </Text>
-            ) : (
-              routes.map((route) => {
-                const isSelected = routeId === route.id;
-                return (
-                  <TouchableOpacity
-                    key={route.id}
-                    className={`flex-row items-center gap-3 rounded-xl px-4 py-3 border ${
-                      isSelected ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-100'
-                    }`}
-                    onPress={() => setRouteId(route.id)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Ruta ${route.name}`}
-                    accessibilityState={{ selected: isSelected }}
-                  >
-                    <View
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: route.color }}
-                    />
-                    <View className="flex-1">
-                      <Text className="text-sm font-medium text-gray-800" numberOfLines={1}>
-                        {route.name}
-                      </Text>
-                      <Text className="text-xs text-gray-400 capitalize">
-                        {route.type} · S/ {route.fare.toFixed(2)}
-                      </Text>
-                    </View>
-                    {isSelected ? (
-                      <Ionicons name="checkmark-circle" size={18} color="#1D4ED8" />
-                    ) : null}
-                  </TouchableOpacity>
-                );
-              })
-            )}
+              <View className="flex-1">
+                <Text className="text-xs font-semibold text-slate-600">Ruta</Text>
+                <Text className="text-sm font-bold text-slate-900" numberOfLines={1}>
+                  {isLoadingRoutes
+                    ? 'Cargando rutas…'
+                    : (selectedRoute?.name ??
+                      (routes.length === 0 ? 'No hay rutas disponibles' : 'Selecciona una ruta'))}
+                </Text>
+              </View>
+              <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
+            </Pressable>
           </View>
 
           <View className="gap-2">
-            <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-              2. ¿Qué quieres corregir?
-            </Text>
-            <View className="flex-row flex-wrap gap-2">
+            <Text className="text-sm font-bold text-slate-800">2. ¿Qué quieres corregir?</Text>
+            <View className="flex-row flex-wrap gap-2" accessibilityRole="radiogroup">
               {TYPE_OPTIONS.map((option) => {
                 const isSelected = type === option.key;
                 return (
-                  <TouchableOpacity
+                  <Pressable
                     key={option.key}
-                    className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-2 border ${
-                      isSelected ? 'bg-blue-700 border-blue-700' : 'bg-white border-gray-200'
+                    className={`min-h-11 flex-row items-center justify-center gap-2 rounded-full px-4 border ${
+                      isSelected ? 'bg-blue-700 border-blue-700' : 'bg-white border-slate-300'
                     }`}
                     onPress={() => setType(option.key)}
-                    accessibilityRole="button"
+                    accessibilityRole="radio"
                     accessibilityLabel={option.label}
-                    accessibilityState={{ selected: isSelected }}
+                    accessibilityState={{ checked: isSelected }}
                   >
                     <Ionicons
-                      name={option.icon as keyof typeof Ionicons.glyphMap}
-                      size={14}
-                      color={isSelected ? 'white' : '#6B7280'}
+                      name={option.icon}
+                      size={16}
+                      color={isSelected ? colors.white : colors.textSecondary}
                     />
                     <Text
-                      className={`text-xs font-medium ${
-                        isSelected ? 'text-white' : 'text-gray-600'
+                      className={`text-sm font-semibold ${
+                        isSelected ? 'text-white' : 'text-slate-700'
                       }`}
                     >
                       {option.label}
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 );
               })}
             </View>
           </View>
 
           <View className="gap-2">
-            <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-              3. Cuéntanos el detalle
-            </Text>
+            <Text className="text-sm font-bold text-slate-800">3. Cuéntanos el detalle</Text>
             <TextInput
-              className="bg-white rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 min-h-[100px]"
+              className="bg-white rounded-2xl border border-slate-300 px-4 py-3 text-base text-slate-900 min-h-32"
               placeholder="Ej. La parada de Av. Giráldez ahora está una cuadra más al norte…"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={colors.textMuted}
               value={description}
               onChangeText={setDescription}
               multiline
               textAlignVertical="top"
               maxLength={MAX_DESCRIPTION_LENGTH}
+              accessibilityLabel="Detalle de la sugerencia"
+              accessibilityHint="Describe qué información debería corregirse"
             />
-            <Text className="text-xs text-gray-300 self-end">
+            <Text className="text-xs text-slate-600 self-end">
               {description.length}/{MAX_DESCRIPTION_LENGTH}
             </Text>
           </View>
 
           <Button
             label="Enviar sugerencia"
+            loadingLabel="Enviando sugerencia…"
             onPress={handleSubmit}
             isLoading={isSubmitting}
             disabled={!canSubmit}
             size="lg"
-            leftIcon={<Ionicons name="paper-plane-outline" size={16} color="white" />}
+            leftIcon={<Ionicons name="paper-plane-outline" size={18} color={colors.white} />}
           />
-
-          <View className="h-6" />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={isPickerOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setIsPickerOpen(false)}
+      >
+        <View
+          className="flex-1 bg-slate-50"
+          style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
+        >
+          <ScreenHeader
+            title="Selecciona una ruta"
+            subtitle={`${filteredRoutes.length} disponibles`}
+            onBack={() => setIsPickerOpen(false)}
+            backLabel="Cerrar selector de rutas"
+          />
+          <View className="px-4 py-3">
+            <Input
+              placeholder="Buscar por nombre o tipo"
+              value={routeQuery}
+              onChangeText={setRouteQuery}
+              accessibilityLabel="Buscar ruta"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+          <FlatList
+            data={filteredRoutes}
+            keyExtractor={(route) => route.id}
+            renderItem={({ item }) => (
+              <RouteRow
+                route={item}
+                isSelected={routeId === item.id}
+                onPress={() => selectRoute(item)}
+              />
+            )}
+            contentContainerStyle={{ padding: 16, paddingTop: 4, gap: 8, flexGrow: 1 }}
+            keyboardShouldPersistTaps="handled"
+            accessibilityRole="radiogroup"
+            ListEmptyComponent={
+              <ScreenState
+                title="No encontramos esa ruta"
+                message="Prueba con otro nombre o tipo de vehículo."
+                icon="search-outline"
+                actionLabel="Limpiar búsqueda"
+                onAction={() => setRouteQuery('')}
+              />
+            }
+          />
+        </View>
+      </Modal>
     </View>
   );
 }

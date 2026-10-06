@@ -1,7 +1,9 @@
+import type { ReactElement } from 'react';
 import { View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { RouteStep } from '@collectigo/shared';
 import { formatDistance, formatDuration } from '../../utils/format';
+import { colors } from '../../theme/tokens';
 
 interface StepCardProps {
   step: RouteStep;
@@ -16,31 +18,31 @@ const STEP_CONFIG: Record<
   walk: {
     icon: 'walk-outline',
     bgColor: 'bg-amber-50',
-    iconColor: '#D97706',
+    iconColor: colors.warning,
     borderColor: 'border-amber-200',
   },
   board: {
     icon: 'bus-outline',
     bgColor: 'bg-green-50',
-    iconColor: '#16A34A',
+    iconColor: colors.success,
     borderColor: 'border-green-200',
   },
   ride: {
     icon: 'navigate-outline',
     bgColor: 'bg-blue-50',
-    iconColor: '#2563EB',
+    iconColor: colors.primary,
     borderColor: 'border-blue-200',
   },
   transfer: {
     icon: 'repeat-outline',
     bgColor: 'bg-purple-50',
-    iconColor: '#9333EA',
+    iconColor: colors.transfer,
     borderColor: 'border-purple-200',
   },
   arrive: {
     icon: 'location-outline',
     bgColor: 'bg-red-50',
-    iconColor: '#DC2626',
+    iconColor: colors.error,
     borderColor: 'border-red-200',
   },
 };
@@ -52,11 +54,15 @@ const VEHICLE_LABEL: Record<string, string> = {
   bus: 'Bus',
 };
 
-export function StepCard({ step, index, isLast }: StepCardProps) {
+export function StepCard({ step, index, isLast }: StepCardProps): ReactElement {
   const config = STEP_CONFIG[step.type];
 
   return (
-    <View className="flex-row gap-3">
+    <View
+      className="flex-row gap-3"
+      accessible
+      accessibilityLabel={`Paso ${index + 1}. ${step.instruction}. ${step.duration !== undefined ? formatDuration(step.duration) : ''}`}
+    >
       <View className="items-center">
         <View
           className={`w-9 h-9 rounded-full items-center justify-center border ${config.bgColor} ${config.borderColor}`}
@@ -72,30 +78,32 @@ export function StepCard({ step, index, isLast }: StepCardProps) {
             <Text className="text-xs font-bold text-gray-500">{index + 1}</Text>
           </View>
           {step.vehicleType ? (
-            <View className={`px-2 py-0.5 rounded-full ${config.bgColor} border ${config.borderColor}`}>
+            <View
+              className={`px-2 py-0.5 rounded-full ${config.bgColor} border ${config.borderColor}`}
+            >
               <Text className="text-xs font-medium" style={{ color: config.iconColor }}>
                 {VEHICLE_LABEL[step.vehicleType] ?? step.vehicleType}
               </Text>
             </View>
           ) : null}
           {step.routeName ? (
-            <Text className="text-xs text-gray-400 flex-1" numberOfLines={1}>
+            <Text className="text-xs text-slate-600 flex-1" numberOfLines={1}>
               {step.routeName}
             </Text>
           ) : null}
         </View>
 
-        <Text className="text-sm font-medium text-gray-800 leading-5">{step.instruction}</Text>
+        <Text className="text-sm font-medium text-slate-800 leading-5">{step.instruction}</Text>
 
         <View className="flex-row gap-3 mt-1.5">
           {step.distance !== undefined ? (
-            <Text className="text-xs text-gray-400">{formatDistance(step.distance)}</Text>
+            <Text className="text-xs text-slate-600">{formatDistance(step.distance)}</Text>
           ) : null}
           {step.duration !== undefined ? (
-            <Text className="text-xs text-gray-400">{formatDuration(step.duration)}</Text>
+            <Text className="text-xs text-slate-600">{formatDuration(step.duration)}</Text>
           ) : null}
           {step.fare !== undefined ? (
-            <Text className="text-xs font-semibold text-green-600">S/ {step.fare.toFixed(2)}</Text>
+            <Text className="text-xs font-semibold text-green-800">S/ {step.fare.toFixed(2)}</Text>
           ) : null}
         </View>
       </View>

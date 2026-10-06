@@ -1,5 +1,7 @@
+import type { ReactElement } from 'react';
 import { TouchableOpacity, Text, ActivityIndicator, View } from 'react-native';
 import type { TouchableOpacityProps } from 'react-native';
+import { colors } from '../../theme/tokens';
 
 interface ButtonProps extends TouchableOpacityProps {
   label: string;
@@ -7,6 +9,7 @@ interface ButtonProps extends TouchableOpacityProps {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
   size?: 'sm' | 'md' | 'lg';
   leftIcon?: React.ReactNode;
+  loadingLabel?: string;
 }
 
 export function Button({
@@ -15,14 +18,15 @@ export function Button({
   variant = 'primary',
   size = 'md',
   leftIcon,
+  loadingLabel,
   disabled,
   style,
   ...rest
-}: ButtonProps) {
+}: ButtonProps): ReactElement {
   const sizeClasses = {
-    sm: 'px-4 py-2.5 rounded-xl',
-    md: 'px-5 py-3.5 rounded-xl',
-    lg: 'px-6 py-4 rounded-2xl',
+    sm: 'px-4 min-h-11 rounded-xl',
+    md: 'px-5 min-h-12 rounded-xl',
+    lg: 'px-6 min-h-[52px] rounded-2xl',
   }[size];
 
   const bgClass = {
@@ -46,6 +50,8 @@ export function Button({
   }[size];
 
   const isDisabled = disabled || isLoading;
+  const indicatorColor =
+    variant === 'primary' ? colors.white : variant === 'danger' ? colors.error : colors.primary;
 
   return (
     <TouchableOpacity
@@ -53,20 +59,17 @@ export function Button({
         isDisabled ? 'opacity-50' : 'active:opacity-80'
       }`}
       disabled={isDisabled}
+      accessibilityRole="button"
+      accessibilityLabel={isLoading ? `${label}, cargando` : label}
+      accessibilityState={{ disabled: Boolean(isDisabled), busy: Boolean(isLoading) }}
       style={style}
       {...rest}
     >
-      {isLoading ? (
-        <ActivityIndicator
-          size="small"
-          color={variant === 'primary' ? '#ffffff' : '#1D4ED8'}
-        />
-      ) : (
-        <>
-          {leftIcon ? <View>{leftIcon}</View> : null}
-          <Text className={`${textClass} ${textSize}`}>{label}</Text>
-        </>
-      )}
+      {isLoading ? <ActivityIndicator size="small" color={indicatorColor} /> : null}
+      {!isLoading && leftIcon ? <View>{leftIcon}</View> : null}
+      <Text className={`${textClass} ${textSize}`}>
+        {isLoading ? (loadingLabel ?? label) : label}
+      </Text>
     </TouchableOpacity>
   );
 }

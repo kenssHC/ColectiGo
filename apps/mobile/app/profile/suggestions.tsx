@@ -1,26 +1,23 @@
 import { useCallback, useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  RefreshControl,
-} from 'react-native';
+import type { ReactElement } from 'react';
+import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import type { SuggestionStatus } from '@collectigo/shared';
 import { ErrorBanner } from '../../src/components/ui/ErrorBanner';
+import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
+import { ScreenState } from '../../src/components/ui/ScreenState';
 import {
   suggestionsService,
   type SuggestionWithRoute,
 } from '../../src/services/suggestions.service';
-import type { SuggestionStatus } from '@collectigo/shared';
+import { colors } from '../../src/theme/tokens';
 
 const STATUS_LABEL: Record<SuggestionStatus, { label: string; color: string; bg: string }> = {
-  pending: { label: 'Pendiente', color: '#D97706', bg: 'bg-amber-50' },
-  approved: { label: 'Aprobada', color: '#16A34A', bg: 'bg-green-50' },
-  rejected: { label: 'Rechazada', color: '#DC2626', bg: 'bg-red-50' },
+  pending: { label: 'Pendiente', color: colors.warning, bg: 'bg-amber-50' },
+  approved: { label: 'Aprobada', color: colors.success, bg: 'bg-green-50' },
+  rejected: { label: 'Rechazada', color: colors.error, bg: 'bg-red-50' },
 };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -31,7 +28,29 @@ const TYPE_LABEL: Record<string, string> = {
   other: 'Otro',
 };
 
-export default function SuggestionsScreen() {
+function SuggestionCard({ item }: { item: SuggestionWithRoute }): ReactElement {
+  const status = STATUS_LABEL[item.status];
+  return (
+    <View className="bg-white rounded-2xl border border-slate-200 px-4 py-4 gap-2">
+      <View className="flex-row items-center justify-between gap-2">
+        <Text className="text-sm font-bold text-slate-900 flex-1" numberOfLines={1}>
+          {item.route?.name ?? 'Ruta'}
+        </Text>
+        <View className={`px-2.5 py-1 rounded-full ${status.bg}`}>
+          <Text className="text-xs font-bold" style={{ color: status.color }}>
+            {status.label}
+          </Text>
+        </View>
+      </View>
+      <Text className="text-xs font-semibold text-slate-600">
+        {TYPE_LABEL[item.type] ?? item.type}
+      </Text>
+      <Text className="text-sm text-slate-700 leading-5">{item.description}</Text>
+    </View>
+  );
+}
+
+export default function SuggestionsScreen(): ReactElement {
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState<SuggestionWithRoute[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -43,8 +62,7 @@ export default function SuggestionsScreen() {
     else setIsLoading(true);
     setErrorMessage(null);
     try {
-      const data = await suggestionsService.mine();
-      setItems(data);
+      setItems(await suggestionsService.mine());
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : 'No se pudieron cargar las sugerencias',
@@ -61,86 +79,80 @@ export default function SuggestionsScreen() {
     }, [load]),
   );
 
+  const newSuggestionAction = (
+    <Pressable
+      className="min-h-11 px-3 rounded-full bg-blue-700 flex-row items-center justify-center gap-1 active:bg-blue-800"
+      onPress={() => router.push('/profile/new-suggestion')}
+      accessibilityRole="button"
+      accessibilityLabel="Crear nueva sugerencia"
+    >
+      <Ionicons name="add" size={16} color={colors.white} />
+      <Text className="text-white text-sm font-bold">Nueva</Text>
+    </Pressable>
+  );
+
   return (
-    <View className="flex-1 bg-gray-50" style={{ paddingTop: insets.top }}>
-      <View className="bg-white border-b border-gray-100 px-4 py-3 flex-row items-center gap-3">
-        <TouchableOpacity
-          className="w-9 h-9 rounded-full bg-gray-100 items-center justify-center"
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="Volver al perfil"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="arrow-back-outline" size={18} color="#374151" />
-        </TouchableOpacity>
-        <Text className="text-base font-bold text-gray-900 flex-1">Mis sugerencias</Text>
-        <TouchableOpacity
-          className="flex-row items-center gap-1 bg-blue-700 rounded-full px-3.5 py-2"
-          onPress={() => router.push('/profile/new-suggestion')}
-          accessibilityRole="button"
-          accessibilityLabel="Crear nueva sugerencia"
-        >
-          <Ionicons name="add" size={14} color="white" />
-          <Text className="text-white text-xs font-semibold">Nueva</Text>
-        </TouchableOpacity>
-      </View>
+    <View className="flex-1 bg-slate-50" style={{ paddingTop: insets.top }}>
+      <ScreenHeader
+        title="Mis sugerencias"
+        subtitle="Correcciones enviadas"
+        onBack={() => router.back()}
+        backLabel="Volver al perfil"
+        rightAction={newSuggestionAction}
+      />
 
       {isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#1D4ED8" />
-        </View>
+        <ScreenState
+          title="Cargando sugerencias"
+          message="Estamos consultando tus contribuciones."
+          isLoading
+        />
+      ) : errorMessage && items.length === 0 ? (
+        <ScreenState
+          title="No pudimos cargar tus sugerencias"
+          message={errorMessage}
+          icon="cloud-offline-outline"
+          actionLabel="Reintentar"
+          onAction={() => void load()}
+        />
       ) : (
-        <ScrollView
-          contentContainerStyle={{ padding: 16, gap: 12, flexGrow: 1 }}
-          refreshControl={
-            <RefreshControl refreshing={isRefreshing} onRefresh={() => void load(true)} />
+        <FlatList
+          data={items}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => <SuggestionCard item={item} />}
+          contentContainerStyle={{
+            padding: 16,
+            gap: 12,
+            flexGrow: 1,
+            paddingBottom: Math.max(insets.bottom, 24),
+          }}
+          ListHeaderComponent={
+            errorMessage ? (
+              <ErrorBanner
+                message={errorMessage}
+                actionLabel="Reintentar"
+                onAction={() => void load()}
+              />
+            ) : null
           }
-        >
-          {errorMessage ? <ErrorBanner message={errorMessage} /> : null}
-
-          {!errorMessage && items.length === 0 ? (
-            <View className="flex-1 items-center justify-center py-16 gap-2">
-              <Ionicons name="git-branch-outline" size={40} color="#D1D5DB" />
-              <Text className="text-gray-400 text-base font-medium">Sin sugerencias aún</Text>
-              <Text className="text-gray-300 text-sm text-center px-8">
-                Cuando envíes correcciones sobre rutas, aparecerán aquí
-              </Text>
-              <TouchableOpacity
-                className="mt-3 bg-blue-700 rounded-xl px-5 py-3"
-                onPress={() => router.push('/profile/new-suggestion')}
-                accessibilityRole="button"
-                accessibilityLabel="Crear mi primera sugerencia"
-              >
-                <Text className="text-white text-sm font-semibold">Crear mi primera sugerencia</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
-
-          {items.map((item) => {
-            const status = STATUS_LABEL[item.status];
-            return (
-              <View
-                key={item.id}
-                className="bg-white rounded-2xl border border-gray-100 px-4 py-3.5 gap-2"
-              >
-                <View className="flex-row items-center justify-between gap-2">
-                  <Text className="text-sm font-semibold text-gray-900 flex-1" numberOfLines={1}>
-                    {item.route?.name ?? 'Ruta'}
-                  </Text>
-                  <View className={`px-2 py-0.5 rounded-full ${status.bg}`}>
-                    <Text className="text-xs font-medium" style={{ color: status.color }}>
-                      {status.label}
-                    </Text>
-                  </View>
-                </View>
-                <Text className="text-xs text-gray-400">
-                  {TYPE_LABEL[item.type] ?? item.type}
-                </Text>
-                <Text className="text-sm text-gray-700 leading-5">{item.description}</Text>
-              </View>
-            );
-          })}
-        </ScrollView>
+          ListEmptyComponent={
+            <ScreenState
+              title="Aún no enviaste sugerencias"
+              message="Ayúdanos a corregir recorridos, tarifas, horarios o puntos de parada."
+              icon="git-branch-outline"
+              actionLabel="Crear mi primera sugerencia"
+              onAction={() => router.push('/profile/new-suggestion')}
+            />
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={() => void load(true)}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
+        />
       )}
     </View>
   );
