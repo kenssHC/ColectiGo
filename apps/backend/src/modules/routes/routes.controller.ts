@@ -8,7 +8,9 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { RoutesService } from './routes.service';
+import { RouteSuggestionsService } from './route-suggestions.service';
 import { FirebaseAuthGuard } from '../../common/guards/firebase-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -24,6 +26,7 @@ export class RoutesController {
   constructor(
     private readonly routesService: RoutesService,
     private readonly usersService: UsersService,
+    private readonly routeSuggestionsService: RouteSuggestionsService,
   ) {}
 
   @Get()
@@ -55,12 +58,16 @@ export class RoutesController {
 
   @Post(':id/suggestions')
   @UseGuards(FirebaseAuthGuard)
-  async suggest(
+  @Throttle({ default: { limit: 3, ttl: 600_000 } })
+  suggest(
     @Param('id', ParseUUIDPipe) routeId: string,
     @Body() dto: CreateSuggestionDto,
     @CurrentUser() currentUser: FirebaseAuthPayload,
   ) {
-    const user = await this.usersService.findByFirebaseUid(currentUser.uid);
-    return this.routesService.createSuggestion(routeId, dto, user);
+    return this.routeSuggestionsService.sendSuggestion(routeId, dto, {
+      uid: currentUser.uid,
+      email: currentUser.email,
+      displayName: currentUser.name || currentUser.email.split('@')[0],
+    });
   }
 }

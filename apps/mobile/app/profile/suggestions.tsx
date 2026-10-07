@@ -127,18 +127,29 @@ export default function SuggestionsScreen(): ReactElement {
             paddingBottom: Math.max(insets.bottom, 24),
           }}
           ListHeaderComponent={
-            errorMessage ? (
-              <ErrorBanner
-                message={errorMessage}
-                actionLabel="Reintentar"
-                onAction={() => void load()}
-              />
-            ) : null
+            <View className="gap-3">
+              <View className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3">
+                <Text className="text-sm font-semibold text-blue-900">
+                  Envío privado por correo
+                </Text>
+                <Text className="text-sm text-blue-800 mt-1 leading-5">
+                  Las nuevas sugerencias se envían directamente al equipo de ColectiGO y no se
+                  guardan en este historial. Aquí solo verás contribuciones anteriores.
+                </Text>
+              </View>
+              {errorMessage ? (
+                <ErrorBanner
+                  message={errorMessage}
+                  actionLabel="Reintentar"
+                  onAction={() => void load()}
+                />
+              ) : null}
+            </View>
           }
           ListEmptyComponent={
             <ScreenState
-              title="Aún no enviaste sugerencias"
-              message="Ayúdanos a corregir recorridos, tarifas, horarios o puntos de parada."
+              title="No tienes contribuciones anteriores"
+              message="Puedes enviarnos por correo una corrección de recorrido, tarifa, horario o punto de parada."
               icon="git-branch-outline"
               actionLabel="Crear mi primera sugerencia"
               onAction={() => router.push('/profile/new-suggestion')}

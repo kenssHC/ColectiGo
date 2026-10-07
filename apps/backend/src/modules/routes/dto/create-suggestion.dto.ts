@@ -1,3 +1,5 @@
+import { Transform } from 'class-transformer';
+import type { TransformFnParams } from 'class-transformer';
 import { IsEnum, IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import type { SuggestionType } from '@collectigo/shared';
 
@@ -8,5 +10,8 @@ export class CreateSuggestionDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(1000)
+  @Transform(({ value }: TransformFnParams): unknown =>
+    typeof value === 'string' ? value.trim() : (value as unknown),
+  )
   description: string;
 }

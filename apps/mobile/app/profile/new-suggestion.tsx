@@ -111,7 +111,7 @@ export default function NewSuggestionScreen(): ReactElement {
   const canSubmit = routeId !== null && type !== null && description.trim().length > 0;
 
   async function handleSubmit(): Promise<void> {
-    if (!routeId || !type || !description.trim()) return;
+    if (isSubmitting || !routeId || !type || !description.trim()) return;
 
     setIsSubmitting(true);
     setErrorMessage(null);
@@ -120,13 +120,16 @@ export default function NewSuggestionScreen(): ReactElement {
         type,
         description: description.trim(),
       });
+      setRouteId(null);
+      setType(null);
+      setDescription('');
       Alert.alert(
-        'Sugerencia enviada',
-        'Gracias por ayudar a mejorar las rutas. Revisaremos tu sugerencia pronto.',
+        '¡Gracias por tu sugerencia!',
+        'La hemos recibido correctamente y fue enviada al equipo de ColectiGO.',
         [{ text: 'Entendido', onPress: (): void => router.back() }],
       );
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'No se pudo enviar la sugerencia');
+    } catch {
+      setErrorMessage('No pudimos enviar tu sugerencia en este momento. Inténtalo nuevamente.');
     } finally {
       setIsSubmitting(false);
     }
@@ -258,7 +261,7 @@ export default function NewSuggestionScreen(): ReactElement {
             loadingLabel="Enviando sugerencia…"
             onPress={handleSubmit}
             isLoading={isSubmitting}
-            disabled={!canSubmit}
+            disabled={!canSubmit || isSubmitting}
             size="lg"
             leftIcon={<Ionicons name="paper-plane-outline" size={18} color={colors.white} />}
           />

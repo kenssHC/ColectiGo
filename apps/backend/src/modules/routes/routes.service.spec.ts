@@ -3,28 +3,23 @@ import { RoutesService } from './routes.service';
 import type { Repository } from 'typeorm';
 import type { RouteEntity } from './entities/route.entity';
 import type { RouteSuggestion } from './entities/route-suggestion.entity';
-import type { UserEntity } from '../users/entities/user.entity';
 
 describe('RoutesService', () => {
-  let routeRepository: { create: jest.Mock; save: jest.Mock; find: jest.Mock; findOne: jest.Mock };
-  let suggestionRepository: {
-    create: jest.Mock;
-    save: jest.Mock;
-    find: jest.Mock;
-    findOne: jest.Mock;
-  };
+  let routeRepository: jest.Mocked<
+    Pick<Repository<RouteEntity>, 'find' | 'findOne'>
+  >;
+  let suggestionRepository: jest.Mocked<
+    Pick<Repository<RouteSuggestion>, 'find' | 'findOne' | 'save'>
+  >;
   let service: RoutesService;
 
   beforeEach(() => {
     routeRepository = {
-      create: jest.fn((v) => v),
-      save: jest.fn(async (v) => v),
       find: jest.fn(),
       findOne: jest.fn(),
     };
     suggestionRepository = {
-      create: jest.fn((v) => v),
-      save: jest.fn(async (v) => v),
+      save: jest.fn(),
       find: jest.fn(),
       findOne: jest.fn(),
     };
@@ -40,11 +35,13 @@ describe('RoutesService', () => {
       status: 'pending',
       route: { id: 'r1' },
       user: { id: 'u1' },
-    };
+    } as RouteSuggestion;
     suggestionRepository.findOne.mockResolvedValueOnce(suggestion);
-    suggestionRepository.save.mockImplementation(async (v) => v);
+    suggestionRepository.save.mockResolvedValueOnce(suggestion);
 
-    const result = await service.updateSuggestionStatus('sug-1', { status: 'approved' });
+    const result = await service.updateSuggestionStatus('sug-1', {
+      status: 'approved',
+    });
 
     expect(result.status).toBe('approved');
   });
@@ -53,7 +50,7 @@ describe('RoutesService', () => {
     suggestionRepository.findOne.mockResolvedValueOnce({
       id: 'sug-1',
       status: 'approved',
-    });
+    } as RouteSuggestion);
 
     await expect(
       service.updateSuggestionStatus('sug-1', { status: 'rejected' }),
@@ -66,24 +63,5 @@ describe('RoutesService', () => {
     await expect(
       service.updateSuggestionStatus('sug-x', { status: 'approved' }),
     ).rejects.toBeInstanceOf(NotFoundException);
-  });
-
-  it('createSuggestion asocia ruta y usuario', async () => {
-    const route = { id: 'route-1', stops: [] } as unknown as RouteEntity;
-    const user = { id: 'user-1' } as UserEntity;
-    routeRepository.findOne.mockResolvedValueOnce(route);
-
-    await service.createSuggestion(
-      'route-1',
-      { type: 'fare', description: 'Tarifa incorrecta' },
-      user,
-    );
-
-    expect(suggestionRepository.create).toHaveBeenCalledWith({
-      type: 'fare',
-      description: 'Tarifa incorrecta',
-      route,
-      user,
-    });
   });
 });

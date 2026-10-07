@@ -16,6 +16,11 @@ interface BackendSuggestion {
   user?: { id: string };
 }
 
+interface SuggestionDeliveryResponse {
+  success: true;
+  message: string;
+}
+
 function mapSuggestion(raw: BackendSuggestion): SuggestionWithRoute {
   return {
     id: raw.id,
@@ -38,11 +43,7 @@ export const suggestionsService = {
   create: async (
     routeId: string,
     payload: { type: SuggestionType; description: string },
-  ): Promise<SuggestionWithRoute> => {
-    const raw = await apiClient.post<BackendSuggestion>(
-      `/routes/${routeId}/suggestions`,
-      payload,
-    );
-    return mapSuggestion(raw);
+  ): Promise<SuggestionDeliveryResponse> => {
+    return apiClient.post<SuggestionDeliveryResponse>(`/routes/${routeId}/suggestions`, payload);
   },
 };

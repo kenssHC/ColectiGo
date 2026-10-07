@@ -53,8 +53,12 @@ cp apps/backend/.env.example apps/backend/.env
 | `FIREBASE_PRIVATE_KEY`  | Private key del service account (con `\n` escapados)            |
 | `CORS_ORIGINS`          | Orígenes permitidos separados por coma (`*` solo en desarrollo) |
 | `GOOGLE_ROUTES_API_KEY` | Key server-side de Routes API para calcular tiempos con tráfico |
+| `ROUTE_SUGGESTIONS_EMAIL` | Correo administrativo que recibe sugerencias nuevas           |
+| `SMTP_*`                | Servidor, credenciales y remitente usados únicamente por backend |
 
-El backend valida las credenciales de Firebase al arrancar.
+El backend valida las credenciales de Firebase al arrancar. En producción también
+requiere la configuración SMTP. Las nuevas sugerencias se envían por correo y no
+se guardan en PostgreSQL; la tabla existente se conserva para consultar datos históricos.
 
 ### 4. Migraciones e importación de rutas
 
@@ -164,9 +168,9 @@ Todos con prefijo `/api/v1`. Las respuestas de error incluyen `requestId` (`X-Re
 | `GET`   | `/routes`                  | —             | Lista rutas activas con sus recorridos      |
 | `GET`   | `/routes/:id`              | —             | Ruta por ID                                 |
 | `POST`  | `/routes`                  | Token + admin | Crea una ruta de transporte                 |
-| `POST`  | `/routes/:id/suggestions`  | Token         | Envía una sugerencia de corrección          |
-| `GET`   | `/routes/suggestions/mine` | Token         | Sugerencias del usuario autenticado         |
-| `PATCH` | `/routes/suggestions/:id`  | Token + admin | Aprueba o rechaza una sugerencia            |
+| `POST`  | `/routes/:id/suggestions`  | Token         | Envía una sugerencia por correo, sin persistirla |
+| `GET`   | `/routes/suggestions/mine` | Token         | Consulta sugerencias históricas del usuario |
+| `PATCH` | `/routes/suggestions/:id`  | Token + admin | Modera una sugerencia histórica             |
 | `POST`  | `/planner/calculate`       | —             | Calcula rutas entre dos puntos (20 req/min) |
 
 ### Ejemplo: Calcular ruta

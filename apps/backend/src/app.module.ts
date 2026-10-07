@@ -3,7 +3,13 @@ import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { appConfig, databaseConfig, firebaseConfig, plannerConfig } from './config/configuration';
+import {
+  appConfig,
+  databaseConfig,
+  firebaseConfig,
+  mailConfig,
+  plannerConfig,
+} from './config/configuration';
 import { validateEnv } from './config/env.validation';
 import { AppController } from './app.controller';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
@@ -22,7 +28,13 @@ import { RoutePathEntity } from './modules/routes/entities/route-path.entity';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig, firebaseConfig, plannerConfig],
+      load: [
+        appConfig,
+        databaseConfig,
+        firebaseConfig,
+        mailConfig,
+        plannerConfig,
+      ],
       validate: validateEnv,
     }),
     ThrottlerModule.forRoot([
