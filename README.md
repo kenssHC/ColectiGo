@@ -57,8 +57,8 @@ cp apps/backend/.env.example apps/backend/.env
 | `SMTP_*`                | Servidor, credenciales y remitente usados únicamente por backend |
 
 El backend valida las credenciales de Firebase al arrancar. En producción también
-requiere la configuración SMTP. Las nuevas sugerencias se envían por correo y no
-se guardan en PostgreSQL; la tabla existente se conserva para consultar datos históricos.
+requiere la configuración SMTP. Las sugerencias se envían por correo y no se guardan
+en PostgreSQL. La tabla histórica se conserva vacía para un posible uso futuro.
 
 ### 4. Migraciones e importación de rutas
 
@@ -148,14 +148,6 @@ pnpm --filter backend test:e2e   # e2e ligeras (sin BD)
 
 CI corre automáticamente en GitHub Actions (`.github/workflows/ci.yml`).
 
-## Roles de administrador
-
-Crear rutas y moderar sugerencias requieren el custom claim `admin` en Firebase:
-
-```js
-admin.auth().setCustomUserClaims(uid, { admin: true });
-```
-
 ## Endpoints principales
 
 Todos con prefijo `/api/v1`. Las respuestas de error incluyen `requestId` (`X-Request-Id`).
@@ -169,8 +161,6 @@ Todos con prefijo `/api/v1`. Las respuestas de error incluyen `requestId` (`X-Re
 | `GET`   | `/routes/:id`              | —             | Ruta por ID                                 |
 | `POST`  | `/routes`                  | Token + admin | Crea una ruta de transporte                 |
 | `POST`  | `/routes/:id/suggestions`  | Token         | Envía una sugerencia por correo, sin persistirla |
-| `GET`   | `/routes/suggestions/mine` | Token         | Consulta sugerencias históricas del usuario |
-| `PATCH` | `/routes/suggestions/:id`  | Token + admin | Modera una sugerencia histórica             |
 | `POST`  | `/planner/calculate`       | —             | Calcula rutas entre dos puntos (20 req/min) |
 
 ### Ejemplo: Calcular ruta

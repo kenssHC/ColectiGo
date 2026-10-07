@@ -131,9 +131,9 @@ export default function ProfileScreen(): ReactElement {
             Mi actividad
           </Text>
           <ProfileOption
-            icon="git-branch-outline"
-            label="Mis sugerencias de rutas"
-            onPress={() => router.push('/profile/suggestions')}
+            icon="paper-plane-outline"
+            label="Enviar sugerencia de ruta"
+            onPress={() => router.push('/profile/new-suggestion')}
           />
           <ProfileOption
             icon="bookmark-outline"

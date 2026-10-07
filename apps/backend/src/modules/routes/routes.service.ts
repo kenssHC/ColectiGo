@@ -1,14 +1,7 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RouteEntity } from './entities/route.entity';
-import { RouteSuggestion } from './entities/route-suggestion.entity';
-import type { UpdateSuggestionStatusDto } from './dto/update-suggestion-status.dto';
-import type { SuggestionStatus } from '@collectigo/shared';
 
 const ACTIVE_ROUTES_CACHE_TTL_MS = 60_000;
 
@@ -20,8 +13,6 @@ export class RoutesService {
   constructor(
     @InjectRepository(RouteEntity)
     private readonly routeRepository: Repository<RouteEntity>,
-    @InjectRepository(RouteSuggestion)
-    private readonly suggestionRepository: Repository<RouteSuggestion>,
   ) {}
 
   async findAll(): Promise<RouteEntity[]> {
@@ -52,38 +43,5 @@ export class RoutesService {
       throw new NotFoundException(`Ruta con id ${id} no encontrada`);
     }
     return route;
-  }
-
-  async findSuggestionsByUser(userId: string): Promise<RouteSuggestion[]> {
-    return this.suggestionRepository.find({
-      where: { user: { id: userId } },
-      relations: { route: true },
-      order: { createdAt: 'DESC' },
-    });
-  }
-
-  async updateSuggestionStatus(
-    suggestionId: string,
-    dto: UpdateSuggestionStatusDto,
-  ): Promise<RouteSuggestion> {
-    const suggestion = await this.suggestionRepository.findOne({
-      where: { id: suggestionId },
-      relations: { route: true, user: true },
-    });
-
-    if (!suggestion) {
-      throw new NotFoundException(
-        `Sugerencia con id ${suggestionId} no encontrada`,
-      );
-    }
-
-    if (suggestion.status !== 'pending') {
-      throw new BadRequestException(
-        `La sugerencia ya fue moderada (estado actual: ${suggestion.status})`,
-      );
-    }
-
-    suggestion.status = dto.status as SuggestionStatus;
-    return this.suggestionRepository.save(suggestion);
   }
 }

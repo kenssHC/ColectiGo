@@ -2,18 +2,11 @@ import { ThrottlerException } from '@nestjs/throttler';
 import type { Repository } from 'typeorm';
 import type { MailService } from '../mail/mail.service';
 import type { RouteEntity } from './entities/route.entity';
-import type { RouteSuggestion } from './entities/route-suggestion.entity';
 import { RoutesService } from './routes.service';
 import { RouteSuggestionsService } from './route-suggestions.service';
 
 describe('RouteSuggestionsService', () => {
   let routeRepository: { findOne: jest.Mock; find: jest.Mock };
-  let suggestionRepository: {
-    create: jest.Mock;
-    save: jest.Mock;
-    find: jest.Mock;
-    findOne: jest.Mock;
-  };
   let mailService: { sendRouteSuggestion: jest.Mock };
   let service: RouteSuggestionsService;
 
@@ -32,18 +25,11 @@ describe('RouteSuggestionsService', () => {
       findOne: jest.fn().mockResolvedValue({ id: 'route-1', name: 'TA-01' }),
       find: jest.fn(),
     };
-    suggestionRepository = {
-      create: jest.fn(),
-      save: jest.fn(),
-      find: jest.fn(),
-      findOne: jest.fn(),
-    };
     mailService = {
       sendRouteSuggestion: jest.fn().mockResolvedValue(undefined),
     };
     const routesService = new RoutesService(
       routeRepository as unknown as Repository<RouteEntity>,
-      suggestionRepository as unknown as Repository<RouteSuggestion>,
     );
     service = new RouteSuggestionsService(
       routesService,
@@ -69,8 +55,6 @@ describe('RouteSuggestionsService', () => {
         description: dto.description,
       }),
     );
-    expect(suggestionRepository.create).not.toHaveBeenCalled();
-    expect(suggestionRepository.save).not.toHaveBeenCalled();
   });
 
   it('rechaza un segundo envío durante el cooldown', async () => {
