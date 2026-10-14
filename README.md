@@ -74,7 +74,12 @@ Las rutas reales se cargan desde archivos GeoJSON (uno o más `Feature` de tipo
 `properties`: `empresa`, `codigo_empresa` (único, ej. TR-0024), `flota`,
 `tipo` (ej. TA-11; el prefijo define el vehículo: TA=colectivo, TC=combi, TM=bus),
 `tarifa`, `paradero_inicio`, `paradero_fin`, `direccion` (`ida` o `vuelta`,
-opcionalmente `con bifurcación`) e `imagen` (URL opcional de la foto del vehículo).
+opcionalmente `con bifurcación`) e `imagen` (URL HTTPS opcional de una foto
+referencial del vehículo). Para las tarjetas de resultados se recomienda una imagen
+horizontal o cuadrada, de al menos 320 px en su lado menor, comprimida a menos de
+100 KB y servida desde un CDN. El vehículo debe estar centrado y el cartel frontal,
+si existe, debe ser legible. Las rutas sin imagen muestran un identificador visual
+con su código y color, por lo que la fotografía nunca sustituye al texto.
 El importador es idempotente: puede ejecutarse varias veces y reemplaza los
 recorridos existentes. No hay paraderos intermedios: los pasajeros suben y bajan
 en cualquier punto del recorrido, y el planner calcula el punto exacto.

@@ -18,6 +18,8 @@ export interface RouteStep {
   routeName?: string;
   routeColor?: string;
   vehicleType?: VehicleType;
+  /** Foto referencial del vehículo que se aborda en este tramo. */
+  vehicleImageUrl?: string | null;
   polyline?: string;
   from?: LatLng;
   to?: LatLng;

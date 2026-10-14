@@ -686,6 +686,9 @@ export class PlannerService {
       routeName: leg.route.name,
       routeColor: leg.route.color,
       vehicleType: leg.route.type,
+      ...(leg.route.fleet?.vehicleImageUrl
+        ? { vehicleImageUrl: leg.route.fleet.vehicleImageUrl }
+        : {}),
     };
   }
 

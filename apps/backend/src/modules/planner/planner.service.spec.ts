@@ -31,6 +31,7 @@ function makeRoute(
   fare: number,
   paths: RoutePathEntity[],
   type: VehicleType = 'colectivo',
+  vehicleImageUrl: string | null = null,
 ): RouteEntity {
   return {
     id: `route-${name}`,
@@ -44,7 +45,7 @@ function makeRoute(
     fleet: {
       id: 'fleet-135',
       number: '135',
-      vehicleImageUrl: null,
+      vehicleImageUrl,
       company: { id: 'company-1', name: 'Virgen del Carmen', code: 'TR-0024' },
     },
     paths,
@@ -283,6 +284,45 @@ describe('PlannerService', () => {
     expect(rideStep.path![rideStep.path!.length - 1]).toEqual(rideStep.to);
   });
 
+  it('expone la foto referencial en la opción directa y en su paso de abordaje', async () => {
+    const imageUrl = 'https://cdn.example.com/ta-11-thumbnail.webp';
+    const routeWithImage = makeRoute(
+      'TA-11-FOTO',
+      1,
+      [
+        makePath('ida', [
+          { lat: 0.001, lng: 0.0005 },
+          { lat: 0.019, lng: 0.0005 },
+        ]),
+      ],
+      'colectivo',
+      imageUrl,
+    );
+    const response = await buildService([routeWithImage]).calculate(
+      origin,
+      destination,
+    );
+    const transit = findTransit(allOptions(response));
+
+    expect(transit?.vehicleImageUrl).toBe(imageUrl);
+    expect(
+      transit?.steps.find((step) => step.type === 'board')?.vehicleImageUrl,
+    ).toBe(imageUrl);
+  });
+
+  it('omite la foto referencial cuando la flota no tiene una configurada', async () => {
+    const response = await buildService([cheapRoute]).calculate(
+      origin,
+      destination,
+    );
+    const transit = findTransit(allOptions(response));
+
+    expect(transit?.vehicleImageUrl).toBeUndefined();
+    expect(
+      transit?.steps.find((step) => step.type === 'board')?.vehicleImageUrl,
+    ).toBeUndefined();
+  });
+
   it('usa la duración con tráfico real cuando Google responde', async () => {
     const service = buildService([cheapRoute], { rideSeconds: 900 });
     const response = await service.calculate(origin, destination);
@@ -369,18 +409,32 @@ describe('PlannerService', () => {
   });
 
   it('combina dos rutas y cobra cada abordaje por separado', async () => {
-    const firstRoute = makeRoute('TA-01', 2, [
-      makePath('ida', [
-        { lat: 0, lng: 0 },
-        { lat: 0.01, lng: 0 },
-      ]),
-    ]);
-    const secondRoute = makeRoute('TAT-02', 2, [
-      makePath('ida', [
-        { lat: 0.01, lng: 0 },
-        { lat: 0.01, lng: 0.02 },
-      ]),
-    ]);
+    const firstImage = 'https://cdn.example.com/ta-01-thumbnail.webp';
+    const secondImage = 'https://cdn.example.com/tat-02-thumbnail.webp';
+    const firstRoute = makeRoute(
+      'TA-01',
+      2,
+      [
+        makePath('ida', [
+          { lat: 0, lng: 0 },
+          { lat: 0.01, lng: 0 },
+        ]),
+      ],
+      'colectivo',
+      firstImage,
+    );
+    const secondRoute = makeRoute(
+      'TAT-02',
+      2,
+      [
+        makePath('ida', [
+          { lat: 0.01, lng: 0 },
+          { lat: 0.01, lng: 0.02 },
+        ]),
+      ],
+      'colectivo',
+      secondImage,
+    );
     const service = buildService([firstRoute, secondRoute]);
     const response = await service.calculate(origin, { lat: 0.01, lng: 0.02 });
     const transfer = findTransfer(allOptions(response));
@@ -403,6 +457,11 @@ describe('PlannerService', () => {
         .filter((step) => step.type === 'board')
         .map((step) => step.fare),
     ).toEqual([2, 2]);
+    expect(
+      transfer!.steps
+        .filter((step) => step.type === 'board')
+        .map((step) => step.vehicleImageUrl),
+    ).toEqual([firstImage, secondImage]);
   });
 
   it('no conecta rutas separadas por más de 150 metros', async () => {

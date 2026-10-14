@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { PlannerBadge, PlannerResult, VehicleTimeSource } from '@collectigo/shared';
 import { usePlannerStore } from '../../src/stores/planner.store';
 import { StepCard } from '../../src/components/ui/StepCard';
+import { VehicleRoutePreview } from '../../src/components/ui/VehicleRoutePreview';
 import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
 import { ScreenState } from '../../src/components/ui/ScreenState';
 import { ResultMap } from '../../src/components/map/ResultMap';
@@ -74,12 +75,6 @@ interface OptionRowProps {
 function OptionRow({ option, isSelected, isBest, onPress }: OptionRowProps): ReactElement {
   const transfers = getTransferCount(option);
   const walkingDistance = getWalkingDistance(option);
-  const icon = isWalkOnly(option)
-    ? 'walk-outline'
-    : transfers > 0
-      ? 'repeat-outline'
-      : 'bus-outline';
-
   return (
     <Pressable
       className={`min-h-24 flex-row items-center gap-3 px-4 py-3 rounded-2xl border-2 ${
@@ -90,13 +85,7 @@ function OptionRow({ option, isSelected, isBest, onPress }: OptionRowProps): Rea
       accessibilityLabel={`${option.routeName ?? 'Opción'}, ${formatDuration(option.totalDuration)}, ${option.totalFare > 0 ? `S/ ${option.totalFare.toFixed(2)}` : 'gratis'}, ${formatDistance(walkingDistance)} caminando, ${transferLabel(transfers)}`}
       accessibilityState={{ checked: isSelected }}
     >
-      <View
-        className={`w-11 h-11 rounded-full items-center justify-center ${
-          isSelected ? 'bg-blue-700' : 'bg-slate-100'
-        }`}
-      >
-        <Ionicons name={icon} size={20} color={isSelected ? colors.white : colors.textSecondary} />
-      </View>
+      <VehicleRoutePreview result={option} />
 
       <View className="flex-1 gap-1">
         <View className="flex-row items-center gap-2 flex-wrap">
