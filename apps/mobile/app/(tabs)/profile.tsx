@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Alert, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,6 +8,7 @@ import { authService } from '../../src/services/auth.service';
 import { useAuthStore } from '../../src/stores/auth.store';
 import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
 import { colors } from '../../src/theme/tokens';
+import { mobileAdsService } from '../../src/services/ads/mobile-ads.service';
 
 interface ProfileOptionProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -66,6 +68,17 @@ function ProfileOption({
 export default function ProfileScreen(): ReactElement {
   const insets = useSafeAreaInsets();
   const { user, setUser, setAuthOperationInProgress } = useAuthStore();
+  const [showAdPrivacyOptions, setShowAdPrivacyOptions] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    void mobileAdsService.isPrivacyOptionsRequired().then((required) => {
+      if (mounted) setShowAdPrivacyOptions(required);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const initials = user?.displayName
     ? user.displayName
@@ -104,6 +117,17 @@ export default function ProfileScreen(): ReactElement {
         },
       },
     ]);
+  }
+
+  async function handleAdPrivacyOptions(): Promise<void> {
+    const shown = await mobileAdsService.showPrivacyOptions();
+    if (!shown) {
+      Alert.alert(
+        'Privacidad de anuncios',
+        'Las opciones de privacidad no están disponibles en este momento.',
+      );
+    }
+    setShowAdPrivacyOptions(await mobileAdsService.isPrivacyOptionsRequired());
   }
 
   return (
@@ -173,6 +197,15 @@ export default function ProfileScreen(): ReactElement {
             disabled
             trailingLabel="Próximamente"
           />
+          {showAdPrivacyOptions ? (
+            <ProfileOption
+              icon="shield-checkmark-outline"
+              label="Privacidad de anuncios"
+              onPress={() => {
+                void handleAdPrivacyOptions();
+              }}
+            />
+          ) : null}
           <ProfileOption
             icon="information-circle-outline"
             label="Sobre ColectiGO"

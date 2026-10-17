@@ -146,6 +146,16 @@ Para crear un APK de desarrollo en EAS se usa el perfil `development` definido e
 `apps/mobile/eas.json`. La variable `GOOGLE_MAPS_API_KEY` debe existir también en
 el entorno `development` de EAS.
 
+### 6.1 Publicidad de prueba
+
+La app precarga un interstitial de Google Mobile Ads antes de algunas
+transiciones hacia resultados. La integración está bloqueada en IDs oficiales
+de prueba, es no personalizada y nunca impide consultar rutas si el anuncio
+falla. Al ser una dependencia nativa, requiere un nuevo development build.
+
+Consulta el comportamiento, los pasos de compilación y las verificaciones en
+[`docs/ads-test-setup.md`](docs/ads-test-setup.md).
+
 ## Desarrollo
 
 ```bash
@@ -164,6 +174,7 @@ pnpm --filter @collectigo/shared build
 ## Pruebas
 
 ```bash
+pnpm --filter @collectigo/mobile test # publicidad y flujo móvil
 pnpm --filter backend test       # unitarias
 pnpm --filter backend test:e2e   # e2e ligeras (sin BD)
 ```

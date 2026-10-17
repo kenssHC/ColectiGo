@@ -7,6 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import type { ReactElement } from 'react';
 import { useAuthListener } from '../src/hooks/useAuthListener';
 import { useAuthStore } from '../src/stores/auth.store';
+import { mobileAdsService } from '../src/services/ads/mobile-ads.service';
 
 function LoadingScreen(): ReactElement {
   return (
@@ -25,6 +26,10 @@ export default function RootLayout(): ReactElement {
   useAuthListener();
   const segments = useSegments();
   const { user, isLoading, isAuthOperationInProgress } = useAuthStore();
+
+  useEffect(() => {
+    void mobileAdsService.initialize();
+  }, []);
 
   useEffect(() => {
     if (isLoading || isAuthOperationInProgress) return;
