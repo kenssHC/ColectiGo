@@ -3,4 +3,6 @@ export interface FirebaseAuthPayload {
   email: string;
   name: string;
   isAdmin: boolean;
+  signInProvider: string;
+  authTime: number;
 }

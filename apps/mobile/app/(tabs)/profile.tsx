@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Alert, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -65,7 +65,7 @@ function ProfileOption({
 
 export default function ProfileScreen(): ReactElement {
   const insets = useSafeAreaInsets();
-  const { user, setUser } = useAuthStore();
+  const { user, setUser, setAuthOperationInProgress } = useAuthStore();
 
   const initials = user?.displayName
     ? user.displayName
@@ -75,13 +75,21 @@ export default function ProfileScreen(): ReactElement {
         .join('')
         .toUpperCase()
     : '?';
+  const accessMethod = user?.authMethods.includes('google')
+    ? user.authMethods.includes('password')
+      ? 'Google + contraseña'
+      : 'Google'
+    : user?.authMethods.includes('password')
+      ? 'Contraseña'
+      : 'No disponible';
 
   async function handleLogout(): Promise<void> {
+    setAuthOperationInProgress(true);
     try {
       await authService.signOut();
     } finally {
       setUser(null);
-      router.replace('/(auth)/login');
+      setAuthOperationInProgress(false);
     }
   }
 
@@ -108,9 +116,17 @@ export default function ProfileScreen(): ReactElement {
       >
         <View className="bg-white mx-4 mt-4 rounded-2xl border border-gray-100 px-4 py-5">
           <View className="flex-row items-center gap-4">
-            <View className="w-16 h-16 rounded-2xl bg-blue-700 items-center justify-center">
-              <Text className="text-white text-2xl font-bold">{initials}</Text>
-            </View>
+            {user?.avatarUrl ? (
+              <Image
+                source={{ uri: user.avatarUrl }}
+                className="w-16 h-16 rounded-2xl bg-blue-50"
+                accessibilityLabel="Foto de perfil"
+              />
+            ) : (
+              <View className="w-16 h-16 rounded-2xl bg-blue-700 items-center justify-center">
+                <Text className="text-white text-2xl font-bold">{initials}</Text>
+              </View>
+            )}
             <View className="flex-1">
               <Text className="text-lg font-bold text-gray-900" numberOfLines={1}>
                 {user?.displayName ?? 'Usuario'}
@@ -122,6 +138,7 @@ export default function ProfileScreen(): ReactElement {
                 <View className="w-1.5 h-1.5 rounded-full bg-green-500" />
                 <Text className="text-xs text-green-600 font-medium">Cuenta activa</Text>
               </View>
+              <Text className="text-xs text-slate-500 mt-1">Método de acceso: {accessMethod}</Text>
             </View>
           </View>
         </View>

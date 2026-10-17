@@ -1,7 +1,24 @@
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as admin from 'firebase-admin';
+import type { UserRecord } from 'firebase-admin/auth';
 import type { FirebaseAuthPayload } from './interfaces/firebase-auth-payload.interface';
+
+interface EnsureFirebaseUserInput {
+  uid: string;
+  email: string;
+  displayName: string;
+  photoUrl: string | null;
+}
+
+function firebaseErrorCode(error: unknown): string | undefined {
+  return (error as { code?: string } | null)?.code;
+}
 
 @Injectable()
 export class AuthService {
@@ -19,11 +36,82 @@ export class AuthService {
         email: decoded.email ?? '',
         name: (decoded.name as string | undefined) ?? '',
         isAdmin: decoded.admin === true,
+        signInProvider: decoded.firebase?.sign_in_provider ?? '',
+        authTime: decoded.auth_time,
       };
     } catch (error) {
       this.logger.warn('Token de Firebase inválido', error);
       throw new UnauthorizedException('Token inválido o expirado');
     }
+  }
+
+  createCustomToken(uid: string): Promise<string> {
+    return admin.auth().createCustomToken(uid, { authProvider: 'google' });
+  }
+
+  async findUserByEmail(email: string): Promise<UserRecord | null> {
+    try {
+      return await admin.auth().getUserByEmail(email);
+    } catch (error) {
+      if (firebaseErrorCode(error) === 'auth/user-not-found') return null;
+      throw error;
+    }
+  }
+
+  async findUserByUid(uid: string): Promise<UserRecord | null> {
+    try {
+      return await admin.auth().getUser(uid);
+    } catch (error) {
+      if (firebaseErrorCode(error) === 'auth/user-not-found') return null;
+      throw error;
+    }
+  }
+
+  async ensureGoogleUser(input: EnsureFirebaseUserInput): Promise<UserRecord> {
+    const existing = await this.findUserByUid(input.uid);
+    if (existing) {
+      if (existing.email?.toLowerCase() !== input.email.toLowerCase()) {
+        throw new ConflictException(
+          'La identidad Google está asociada a otro correo',
+        );
+      }
+      return existing;
+    }
+
+    try {
+      return await admin.auth().createUser({
+        uid: input.uid,
+        email: input.email,
+        emailVerified: true,
+        displayName: input.displayName,
+        ...(input.photoUrl ? { photoURL: input.photoUrl } : {}),
+      });
+    } catch (error) {
+      if (firebaseErrorCode(error) === 'auth/uid-already-exists') {
+        const concurrent = await this.findUserByUid(input.uid);
+        if (concurrent) return concurrent;
+      }
+      if (firebaseErrorCode(error) === 'auth/email-already-exists') {
+        throw new ConflictException('Ya existe una cuenta con este correo');
+      }
+      throw error;
+    }
+  }
+
+  async applyGoogleProfile(
+    uid: string,
+    profile: { displayName: string; photoUrl: string | null },
+  ): Promise<void> {
+    const current = await admin.auth().getUser(uid);
+    await admin.auth().updateUser(uid, {
+      emailVerified: true,
+      ...(!current.displayName && profile.displayName
+        ? { displayName: profile.displayName }
+        : {}),
+      ...(!current.photoURL && profile.photoUrl
+        ? { photoURL: profile.photoUrl }
+        : {}),
+    });
   }
 
   private initializeFirebase(): void {

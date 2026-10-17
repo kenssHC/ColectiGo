@@ -1,6 +1,7 @@
 /** @param {import('expo/config').ConfigContext} context */
 module.exports = ({ config }) => {
   const googleMapsApiKey = process.env.GOOGLE_MAPS_API_KEY ?? '';
+  const googleIosUrlScheme = process.env.GOOGLE_IOS_URL_SCHEME?.trim() ?? '';
 
   if (!googleMapsApiKey) {
     console.warn(
@@ -14,6 +15,16 @@ module.exports = ({ config }) => {
     ...config,
     plugins: [
       ...(config.plugins ?? []),
+      ...(googleIosUrlScheme
+        ? [
+            [
+              'react-native-nitro-google-signin',
+              {
+                iosUrlScheme: googleIosUrlScheme,
+              },
+            ],
+          ]
+        : []),
       [
         'react-native-maps',
         {

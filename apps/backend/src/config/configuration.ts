@@ -32,6 +32,10 @@ export const firebaseConfig = registerAs('firebase', () => ({
   privateKey: (process.env.FIREBASE_PRIVATE_KEY ?? '').replace(/\\n/g, '\n'),
 }));
 
+export const googleAuthConfig = registerAs('googleAuth', () => ({
+  webClientId: process.env.GOOGLE_AUTH_WEB_CLIENT_ID?.trim() ?? '',
+}));
+
 export const mailConfig = registerAs('mail', () => ({
   host: process.env.SMTP_HOST ?? '',
   port: parseInt(process.env.SMTP_PORT ?? '587', 10),

@@ -1,21 +1,23 @@
 import { useState } from 'react';
+import type { ReactElement } from 'react';
 import {
-  View,
-  Text,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Text,
   TouchableOpacity,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { GoogleAuthButton } from '../../src/components/auth/GoogleAuthButton';
 import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
 import { ErrorBanner } from '../../src/components/ui/ErrorBanner';
 import { authService, getAuthErrorMessage } from '../../src/services/auth.service';
 import { useAuthStore } from '../../src/stores/auth.store';
-import type { ReactElement } from 'react';
 import { colors } from '../../src/theme/tokens';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -27,9 +29,11 @@ export default function RegisterScreen(): ReactElement {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const { setUser } = useAuthStore();
+  const { setUser, setAuthOperationInProgress } = useAuthStore();
+  const googleEnabled = authService.isGoogleSignInConfigured();
 
   function validate(): string | null {
     if (!displayName.trim()) return 'Ingresa tu nombre completo';
@@ -49,14 +53,59 @@ export default function RegisterScreen(): ReactElement {
     }
     setIsLoading(true);
     setErrorMessage('');
+    setAuthOperationInProgress(true);
     try {
       const user = await authService.register(email, password, displayName);
       setUser(user);
-      router.replace('/(tabs)/map');
-    } catch (err) {
-      setErrorMessage(getAuthErrorMessage(err, 'No se pudo crear la cuenta. Intenta nuevamente'));
+    } catch (caughtError) {
+      setErrorMessage(
+        getAuthErrorMessage(caughtError, 'No se pudo crear la cuenta. Intenta nuevamente'),
+      );
     } finally {
       setIsLoading(false);
+      setAuthOperationInProgress(false);
+    }
+  }
+
+  async function handleGoogleSignIn(): Promise<void> {
+    if (isLoading || isGoogleLoading) return;
+    setIsGoogleLoading(true);
+    setErrorMessage('');
+    setAuthOperationInProgress(true);
+    try {
+      const result = await authService.signInWithGoogle();
+      if (result.status === 'cancelled') {
+        setErrorMessage('Inicio con Google cancelado');
+        return;
+      }
+      if (result.status === 'link_required') {
+        Alert.alert(
+          'Cuenta existente',
+          'Ya existe una cuenta ColectiGO con este correo. Ingresa su contraseña para vincular Google.',
+          [
+            {
+              text: 'Cancelar',
+              style: 'cancel',
+              onPress: () => authService.clearPendingGoogleLink(),
+            },
+            {
+              text: 'Continuar',
+              onPress: () => router.replace('/(auth)/login'),
+            },
+          ],
+          { cancelable: false },
+        );
+        return;
+      }
+
+      setUser(result.user);
+    } catch (error) {
+      setErrorMessage(
+        getAuthErrorMessage(error, 'No se pudo continuar con Google. Intenta nuevamente'),
+      );
+    } finally {
+      setIsGoogleLoading(false);
+      setAuthOperationInProgress(false);
     }
   }
 
@@ -97,8 +146,8 @@ export default function RegisterScreen(): ReactElement {
                 label="Nombre completo"
                 placeholder="Ej. Carlos Quispe"
                 value={displayName}
-                onChangeText={(t) => {
-                  setDisplayName(t);
+                onChangeText={(text) => {
+                  setDisplayName(text);
                   setErrorMessage('');
                 }}
                 autoCapitalize="words"
@@ -107,8 +156,8 @@ export default function RegisterScreen(): ReactElement {
                 label="Correo electrónico"
                 placeholder="tu@correo.com"
                 value={email}
-                onChangeText={(t) => {
-                  setEmail(t);
+                onChangeText={(text) => {
+                  setEmail(text);
                   setErrorMessage('');
                 }}
                 keyboardType="email-address"
@@ -119,8 +168,8 @@ export default function RegisterScreen(): ReactElement {
                 label="Contraseña"
                 placeholder="Mínimo 6 caracteres"
                 value={password}
-                onChangeText={(t) => {
-                  setPassword(t);
+                onChangeText={(text) => {
+                  setPassword(text);
                   setErrorMessage('');
                 }}
                 secureTextEntry
@@ -129,8 +178,8 @@ export default function RegisterScreen(): ReactElement {
                 label="Confirmar contraseña"
                 placeholder="Repite tu contraseña"
                 value={confirmPassword}
-                onChangeText={(t) => {
-                  setConfirmPassword(t);
+                onChangeText={(text) => {
+                  setConfirmPassword(text);
                   setErrorMessage('');
                 }}
                 secureTextEntry
@@ -145,8 +194,24 @@ export default function RegisterScreen(): ReactElement {
                 loadingLabel="Creando cuenta…"
                 onPress={handleRegister}
                 isLoading={isLoading}
+                disabled={isGoogleLoading}
                 size="lg"
               />
+
+              {googleEnabled ? (
+                <>
+                  <View className="flex-row items-center gap-3">
+                    <View className="flex-1 h-px bg-gray-100" />
+                    <Text className="text-slate-500 text-xs">o</Text>
+                    <View className="flex-1 h-px bg-gray-100" />
+                  </View>
+                  <GoogleAuthButton
+                    onPress={() => void handleGoogleSignIn()}
+                    isLoading={isGoogleLoading}
+                    disabled={isLoading}
+                  />
+                </>
+              ) : null}
 
               <TouchableOpacity
                 className="py-3 items-center"

@@ -1,8 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 import { UsersService } from './users.service';
 import type { Repository } from 'typeorm';
 import type { UserEntity } from './entities/user.entity';
+import type { AuthIdentityEntity } from '../auth/entities/auth-identity.entity';
+import type { AuthService } from '../auth/auth.service';
 
 type MockRepository = {
   findOne: jest.Mock;
@@ -11,12 +14,16 @@ type MockRepository = {
 };
 
 function makeUniqueViolation(): QueryFailedError {
-  const driverError = Object.assign(new Error('duplicate key'), { code: '23505' });
+  const driverError = Object.assign(new Error('duplicate key'), {
+    code: '23505',
+  });
   return new QueryFailedError('INSERT', [], driverError);
 }
 
 describe('UsersService', () => {
   let repository: MockRepository;
+  let identityRepository: { find: jest.Mock };
+  let authService: { findUserByUid: jest.Mock };
   let service: UsersService;
 
   const dto = {
@@ -33,7 +40,13 @@ describe('UsersService', () => {
       create: jest.fn((input) => input),
       save: jest.fn(),
     };
-    service = new UsersService(repository as unknown as Repository<UserEntity>);
+    identityRepository = { find: jest.fn().mockResolvedValue([]) };
+    authService = { findUserByUid: jest.fn().mockResolvedValue(null) };
+    service = new UsersService(
+      repository as unknown as Repository<UserEntity>,
+      identityRepository as unknown as Repository<AuthIdentityEntity>,
+      authService as unknown as AuthService,
+    );
   });
 
   describe('createOrFind', () => {
@@ -71,7 +84,9 @@ describe('UsersService', () => {
       repository.save.mockRejectedValueOnce(makeUniqueViolation());
       repository.findOne.mockResolvedValueOnce(null);
 
-      await expect(service.createOrFind(dto)).rejects.toBeInstanceOf(ConflictException);
+      await expect(service.createOrFind(dto)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
     });
 
     it('propaga errores que no son violaciones de unicidad', async () => {
@@ -93,7 +108,29 @@ describe('UsersService', () => {
     it('lanza NotFoundException cuando no existe', async () => {
       repository.findOne.mockResolvedValueOnce(null);
 
-      await expect(service.findByFirebaseUid('uid-x')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.findByFirebaseUid('uid-x')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('getProfile', () => {
+    it('combina los métodos de contraseña y Google sin duplicarlos', async () => {
+      repository.findOne.mockResolvedValueOnce(savedUser);
+      identityRepository.find.mockResolvedValueOnce([
+        { provider: 'google' },
+      ] as AuthIdentityEntity[]);
+      authService.findUserByUid.mockResolvedValueOnce({
+        providerData: [{ providerId: 'password' }],
+        photoURL: 'https://example.com/avatar.png',
+        emailVerified: true,
+      });
+
+      const result = await service.getProfile('uid-1');
+
+      expect(result.authMethods).toEqual(['password', 'google']);
+      expect(result.avatarUrl).toBe('https://example.com/avatar.png');
+      expect(result.emailVerified).toBe(true);
     });
   });
 });

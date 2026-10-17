@@ -1,4 +1,11 @@
-import { Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { UsersService } from './users.service';
 import { FirebaseAuthGuard } from '../../common/guards/firebase-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -12,17 +19,18 @@ export class UsersController {
   @Post('sync')
   @HttpCode(HttpStatus.OK)
   @UseGuards(FirebaseAuthGuard)
-  sync(@CurrentUser() currentUser: FirebaseAuthPayload) {
-    return this.usersService.createOrFind({
+  async sync(@CurrentUser() currentUser: FirebaseAuthPayload) {
+    await this.usersService.createOrFind({
       firebaseUid: currentUser.uid,
       email: currentUser.email,
       displayName: currentUser.name || currentUser.email.split('@')[0],
     });
+    return this.usersService.getProfile(currentUser.uid);
   }
 
   @Get('me')
   @UseGuards(FirebaseAuthGuard)
   getMe(@CurrentUser() currentUser: FirebaseAuthPayload) {
-    return this.usersService.findByFirebaseUid(currentUser.uid);
+    return this.usersService.getProfile(currentUser.uid);
   }
 }

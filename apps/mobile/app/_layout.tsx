@@ -1,9 +1,8 @@
 import '../global.css';
 import { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, router, useSegments } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, ActivityIndicator, Text } from 'react-native';
-import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import type { ReactElement } from 'react';
 import { useAuthListener } from '../src/hooks/useAuthListener';
@@ -24,16 +23,22 @@ function LoadingScreen(): ReactElement {
 
 export default function RootLayout(): ReactElement {
   useAuthListener();
-  const { user, isLoading } = useAuthStore();
+  const segments = useSegments();
+  const { user, isLoading, isAuthOperationInProgress } = useAuthStore();
 
   useEffect(() => {
-    if (isLoading) return;
-    if (user) {
+    if (isLoading || isAuthOperationInProgress) return;
+
+    const topLevelSegment = segments[0] as string | undefined;
+    if (!topLevelSegment || topLevelSegment === 'index') return;
+
+    const isInAuthGroup = topLevelSegment === '(auth)';
+    if (user && isInAuthGroup) {
       router.replace('/(tabs)/map');
-    } else {
+    } else if (!user && !isInAuthGroup) {
       router.replace('/(auth)/login');
     }
-  }, [user, isLoading]);
+  }, [user, isLoading, isAuthOperationInProgress, segments]);
 
   if (isLoading) {
     return (

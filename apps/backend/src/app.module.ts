@@ -7,6 +7,7 @@ import {
   appConfig,
   databaseConfig,
   firebaseConfig,
+  googleAuthConfig,
   mailConfig,
   plannerConfig,
 } from './config/configuration';
@@ -23,6 +24,7 @@ import { RouteSuggestion } from './modules/routes/entities/route-suggestion.enti
 import { CompanyEntity } from './modules/routes/entities/company.entity';
 import { FleetEntity } from './modules/routes/entities/fleet.entity';
 import { RoutePathEntity } from './modules/routes/entities/route-path.entity';
+import { AuthIdentityEntity } from './modules/auth/entities/auth-identity.entity';
 
 @Module({
   imports: [
@@ -32,6 +34,7 @@ import { RoutePathEntity } from './modules/routes/entities/route-path.entity';
         appConfig,
         databaseConfig,
         firebaseConfig,
+        googleAuthConfig,
         mailConfig,
         plannerConfig,
       ],
@@ -59,6 +62,7 @@ import { RoutePathEntity } from './modules/routes/entities/route-path.entity';
           CompanyEntity,
           FleetEntity,
           RoutePathEntity,
+          AuthIdentityEntity,
         ],
         // El esquema se gestiona con migraciones: pnpm --filter backend migration:run
         synchronize: false,

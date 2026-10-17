@@ -18,5 +18,5 @@ export type {
   PlannerRequest,
 } from './interfaces/planner.interface';
 export type { RoutePath, TransportCompany, TransportRoute } from './interfaces/route.interface';
-export type { User } from './interfaces/user.interface';
+export type { AuthMethod, User } from './interfaces/user.interface';
 export type { RouteSuggestion } from './interfaces/suggestion.interface';

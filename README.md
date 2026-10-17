@@ -45,16 +45,17 @@ Esto crea el contenedor `collectigo-postgres` con usuario/contraseña `postgres`
 cp apps/backend/.env.example apps/backend/.env
 ```
 
-| Variable                | Descripción                                                     |
-| ----------------------- | --------------------------------------------------------------- |
-| `DATABASE_*`            | Conexión a PostgreSQL                                           |
-| `FIREBASE_PROJECT_ID`   | ID del proyecto en Firebase Console                             |
-| `FIREBASE_CLIENT_EMAIL` | Client email del service account                                |
-| `FIREBASE_PRIVATE_KEY`  | Private key del service account (con `\n` escapados)            |
-| `CORS_ORIGINS`          | Orígenes permitidos separados por coma (`*` solo en desarrollo) |
-| `GOOGLE_ROUTES_API_KEY` | Key server-side de Routes API para calcular tiempos con tráfico |
-| `ROUTE_SUGGESTIONS_EMAIL` | Correo administrativo que recibe sugerencias nuevas           |
-| `SMTP_*`                | Servidor, credenciales y remitente usados únicamente por backend |
+| Variable                    | Descripción                                                      |
+| --------------------------- | ---------------------------------------------------------------- |
+| `DATABASE_*`                | Conexión a PostgreSQL                                            |
+| `FIREBASE_PROJECT_ID`       | ID del proyecto en Firebase Console                              |
+| `FIREBASE_CLIENT_EMAIL`     | Client email del service account                                 |
+| `FIREBASE_PRIVATE_KEY`      | Private key del service account (con `\n` escapados)             |
+| `GOOGLE_AUTH_WEB_CLIENT_ID` | OAuth Client ID Web para validar tokens de Google                |
+| `CORS_ORIGINS`              | Orígenes permitidos separados por coma (`*` solo en desarrollo)  |
+| `GOOGLE_ROUTES_API_KEY`     | Key server-side de Routes API para calcular tiempos con tráfico  |
+| `ROUTE_SUGGESTIONS_EMAIL`   | Correo administrativo que recibe sugerencias nuevas              |
+| `SMTP_*`                    | Servidor, credenciales y remitente usados únicamente por backend |
 
 El backend valida las credenciales de Firebase al arrancar. En producción también
 requiere la configuración SMTP. Las sugerencias se envían por correo y no se guardan
@@ -90,10 +91,26 @@ en cualquier punto del recorrido, y el planner calcula el punto exacto.
 cp apps/mobile/.env.example apps/mobile/.env
 ```
 
-| Variable                 | Descripción                                                                                  |
-| ------------------------ | -------------------------------------------------------------------------------------------- |
-| `EXPO_PUBLIC_API_URL`    | URL del backend. En dispositivo físico usa la IP LAN (ej. `http://192.168.1.10:3000/api/v1`) |
-| `EXPO_PUBLIC_FIREBASE_*` | Configuración web de Firebase (Consola → Configuración del proyecto → Tus apps)              |
+| Variable                           | Descripción                                                                                  |
+| ---------------------------------- | -------------------------------------------------------------------------------------------- |
+| `EXPO_PUBLIC_API_URL`              | URL del backend. En dispositivo físico usa la IP LAN (ej. `http://192.168.1.10:3000/api/v1`) |
+| `EXPO_PUBLIC_FIREBASE_*`           | Configuración web de Firebase (Consola → Configuración del proyecto → Tus apps)              |
+| `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | OAuth Client ID Web usado por Google Sign-In; debe coincidir con el backend                  |
+
+### 5.1 Inicio de sesión con Google
+
+Google Sign-In usa Android Credential Manager, valida el ID token en el backend
+y crea una sesión Firebase mediante Custom Token. Las identidades externas se
+guardan en `auth_identities`; nunca se vinculan cuentas únicamente por coincidencia
+de correo.
+
+Configura `GOOGLE_AUTH_WEB_CLIENT_ID` en el backend y
+`EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` en mobile con el mismo OAuth Client ID de tipo
+Web. Android requiere además un OAuth Client ID propio para el package
+`com.collectigo.app` y el SHA-1 de cada certificado de firma.
+
+Consulta la guía completa y los pasos de EAS en
+[`docs/google-auth-setup.md`](docs/google-auth-setup.md).
 
 ### 6. Google Maps y development build
 
@@ -157,16 +174,18 @@ CI corre automáticamente en GitHub Actions (`.github/workflows/ci.yml`).
 
 Todos con prefijo `/api/v1`. Las respuestas de error incluyen `requestId` (`X-Request-Id`).
 
-| Método  | Ruta                       | Auth          | Descripción                                 |
-| ------- | -------------------------- | ------------- | ------------------------------------------- |
-| `GET`   | `/health`                  | —             | Health check (sin rate limit)               |
-| `POST`  | `/users/sync`              | Token         | Crea/recupera el usuario a partir del token |
-| `GET`   | `/users/me`                | Token         | Perfil del usuario autenticado              |
-| `GET`   | `/routes`                  | —             | Lista rutas activas con sus recorridos      |
-| `GET`   | `/routes/:id`              | —             | Ruta por ID                                 |
-| `POST`  | `/routes`                  | Token + admin | Crea una ruta de transporte                 |
-| `POST`  | `/routes/:id/suggestions`  | Token         | Envía una sugerencia por correo, sin persistirla |
-| `POST`  | `/planner/calculate`       | —             | Calcula rutas entre dos puntos (20 req/min) |
+| Método | Ruta                      | Auth                         | Descripción                                      |
+| ------ | ------------------------- | ---------------------------- | ------------------------------------------------ |
+| `GET`  | `/health`                 | —                            | Health check (sin rate limit)                    |
+| `POST` | `/users/sync`             | Token                        | Crea/recupera el usuario a partir del token      |
+| `GET`  | `/users/me`               | Token                        | Perfil del usuario autenticado                   |
+| `POST` | `/auth/google`            | —                            | Valida Google y crea una sesión Firebase         |
+| `POST` | `/auth/google/link`       | Token reciente de contraseña | Vincula Google a la cuenta actual                |
+| `GET`  | `/routes`                 | —                            | Lista rutas activas con sus recorridos           |
+| `GET`  | `/routes/:id`             | —                            | Ruta por ID                                      |
+| `POST` | `/routes`                 | Token + admin                | Crea una ruta de transporte                      |
+| `POST` | `/routes/:id/suggestions` | Token                        | Envía una sugerencia por correo, sin persistirla |
+| `POST` | `/planner/calculate`      | —                            | Calcula rutas entre dos puntos (20 req/min)      |
 
 ### Ejemplo: Calcular ruta
 

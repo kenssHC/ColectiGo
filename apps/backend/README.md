@@ -30,7 +30,7 @@ src/
 ├── seeds/                # datos de ejemplo para desarrollo
 ├── common/               # guards (Firebase, admin), filtros, decoradores
 └── modules/
-    ├── auth/             # verificación de tokens de Firebase
+    ├── auth/             # Firebase, Google Sign-In e identidades externas
     ├── users/            # sincronización y perfil de usuarios
     ├── routes/           # rutas, recorridos y sugerencias
     └── planner/          # rutas directas/transbordos y clasificación de opciones
