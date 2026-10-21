@@ -243,6 +243,16 @@ export default function ResultsScreen(): ReactElement | null {
         >
           <ResultMap result={selected} rideColor={RIDE_COLOR} />
 
+          {getWalkingDistance(selected) > 0 ? (
+            <View className="mx-4 mt-3 flex-row gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3">
+              <Ionicons name="warning-outline" size={18} color={colors.warning} />
+              <Text className="flex-1 text-xs leading-5 text-amber-900">
+                Los recorridos a pie son orientativos y podrían no reflejar todas las veredas,
+                cruces o condiciones del camino. Verifica tu entorno durante el viaje.
+              </Text>
+            </View>
+          ) : null}
+
           {options.length > 1 ? (
             <View className="px-4 pt-3 pb-1" accessibilityRole="radiogroup">
               <Text className="text-sm font-bold text-slate-800 mb-2">Compara las opciones</Text>

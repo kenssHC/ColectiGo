@@ -10,20 +10,28 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { GoogleAuthButton } from '../../src/components/auth/GoogleAuthButton';
 import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
 import { ErrorBanner } from '../../src/components/ui/ErrorBanner';
+import { LegalLinks } from '../../src/components/legal/LegalLinks';
 import { authService, getAuthErrorMessage } from '../../src/services/auth.service';
 import { useAuthStore } from '../../src/stores/auth.store';
 import { colors } from '../../src/theme/tokens';
+import {
+  authenticatedDestination,
+  loginHref,
+  parseAuthReturnPath,
+} from '../../src/utils/auth-navigation';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function RegisterScreen(): ReactElement {
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ returnTo?: string | string[] }>();
+  const returnTo = parseAuthReturnPath(params.returnTo);
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -57,6 +65,7 @@ export default function RegisterScreen(): ReactElement {
     try {
       const user = await authService.register(email, password, displayName);
       setUser(user);
+      router.replace(authenticatedDestination(returnTo));
     } catch (caughtError) {
       setErrorMessage(
         getAuthErrorMessage(caughtError, 'No se pudo crear la cuenta. Intenta nuevamente'),
@@ -86,11 +95,11 @@ export default function RegisterScreen(): ReactElement {
             {
               text: 'Cancelar',
               style: 'cancel',
-              onPress: () => authService.clearPendingGoogleLink(),
+              onPress: (): void => authService.clearPendingGoogleLink(),
             },
             {
               text: 'Continuar',
-              onPress: () => router.replace('/(auth)/login'),
+              onPress: (): void => router.replace(loginHref(returnTo ?? undefined)),
             },
           ],
           { cancelable: false },
@@ -99,6 +108,7 @@ export default function RegisterScreen(): ReactElement {
       }
 
       setUser(result.user);
+      router.replace(authenticatedDestination(returnTo));
     } catch (error) {
       setErrorMessage(
         getAuthErrorMessage(error, 'No se pudo continuar con Google. Intenta nuevamente'),
@@ -189,6 +199,8 @@ export default function RegisterScreen(): ReactElement {
             </View>
 
             <View className="gap-3">
+              <LegalLinks context="register" />
+
               <Button
                 label="Crear cuenta"
                 loadingLabel="Creando cuenta…"
@@ -215,7 +227,7 @@ export default function RegisterScreen(): ReactElement {
 
               <TouchableOpacity
                 className="py-3 items-center"
-                onPress={() => router.back()}
+                onPress={() => router.replace(loginHref(returnTo ?? undefined))}
                 accessibilityRole="button"
               >
                 <Text className="text-gray-500 text-sm">

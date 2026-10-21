@@ -4,6 +4,29 @@ const REQUIRED_VARS = [
   'FIREBASE_PRIVATE_KEY',
 ];
 
+const PRODUCTION_REQUIRED_VARS = [
+  'DATABASE_HOST',
+  'DATABASE_PORT',
+  'DATABASE_USER',
+  'DATABASE_PASSWORD',
+  'DATABASE_NAME',
+  'GOOGLE_AUTH_WEB_CLIENT_ID',
+  'CORS_ORIGINS',
+  'WALK_ROUTING_PROVIDER',
+  'SMTP_HOST',
+  'SMTP_PORT',
+  'SMTP_USER',
+  'SMTP_PASSWORD',
+  'SMTP_FROM',
+  'ROUTE_SUGGESTIONS_EMAIL',
+];
+
+const WALK_ROUTING_PROVIDERS = new Set(['osrm', 'google', 'none']);
+const PUBLIC_DEVELOPMENT_ROUTING_HOSTS = new Set([
+  'routing.openstreetmap.de',
+  'router.project-osrm.org',
+]);
+
 function envString(value: unknown): string {
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean')
@@ -19,13 +42,7 @@ export function validateEnv(
 ): Record<string, unknown> {
   const requiredVars =
     config.NODE_ENV === 'production'
-      ? [
-          ...REQUIRED_VARS,
-          'SMTP_HOST',
-          'SMTP_PORT',
-          'SMTP_FROM',
-          'ROUTE_SUGGESTIONS_EMAIL',
-        ]
+      ? [...REQUIRED_VARS, ...PRODUCTION_REQUIRED_VARS]
       : REQUIRED_VARS;
   const missing = requiredVars.filter((key) => {
     const value = config[key];
@@ -63,10 +80,70 @@ export function validateEnv(
     throw new Error('SMTP_SECURE debe ser true o false');
   }
 
+  if (
+    config.SMTP_REQUIRE_TLS !== undefined &&
+    !['true', 'false'].includes(
+      envString(config.SMTP_REQUIRE_TLS).toLowerCase(),
+    )
+  ) {
+    throw new Error('SMTP_REQUIRE_TLS debe ser true o false');
+  }
+
   const hasSmtpUser = envString(config.SMTP_USER).trim() !== '';
   const hasSmtpPassword = envString(config.SMTP_PASSWORD).trim() !== '';
   if (hasSmtpUser !== hasSmtpPassword) {
     throw new Error('SMTP_USER y SMTP_PASSWORD deben configurarse juntos');
+  }
+
+  const walkProvider = envString(config.WALK_ROUTING_PROVIDER)
+    .trim()
+    .toLowerCase();
+  if (walkProvider && !WALK_ROUTING_PROVIDERS.has(walkProvider)) {
+    throw new Error('WALK_ROUTING_PROVIDER debe ser osrm, google o none');
+  }
+
+  if (config.NODE_ENV === 'production') {
+    const corsOrigins = envString(config.CORS_ORIGINS)
+      .split(',')
+      .map((origin) => origin.trim());
+    if (corsOrigins.includes('*')) {
+      throw new Error('CORS_ORIGINS no puede contener * en producción');
+    }
+    if (envString(config.SMTP_REQUIRE_TLS).toLowerCase() !== 'true') {
+      throw new Error('SMTP_REQUIRE_TLS debe ser true en producción');
+    }
+    if (walkProvider === 'none') {
+      throw new Error('WALK_ROUTING_PROVIDER no puede ser none en producción');
+    }
+    if (walkProvider === 'google') {
+      if (!envString(config.GOOGLE_ROUTES_API_KEY).trim()) {
+        throw new Error(
+          'GOOGLE_ROUTES_API_KEY es requerida para el ruteo peatonal de Google',
+        );
+      }
+    }
+    if (walkProvider === 'osrm') {
+      const walkRoutingUrl = envString(config.WALK_ROUTING_URL).trim();
+      if (!walkRoutingUrl) {
+        throw new Error(
+          'WALK_ROUTING_URL es requerida para el proveedor OSRM en producción',
+        );
+      }
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(walkRoutingUrl);
+      } catch {
+        throw new Error('WALK_ROUTING_URL debe ser una URL válida');
+      }
+      if (parsedUrl.protocol !== 'https:') {
+        throw new Error('WALK_ROUTING_URL debe usar HTTPS en producción');
+      }
+      if (PUBLIC_DEVELOPMENT_ROUTING_HOSTS.has(parsedUrl.hostname)) {
+        throw new Error(
+          'El servidor OSRM público solo puede utilizarse en desarrollo',
+        );
+      }
+    }
   }
 
   return config;

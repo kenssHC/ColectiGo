@@ -11,6 +11,10 @@ export const suggestionsService = {
     routeId: string,
     payload: { type: SuggestionType; description: string },
   ): Promise<SuggestionDeliveryResponse> => {
-    return apiClient.post<SuggestionDeliveryResponse>(`/routes/${routeId}/suggestions`, payload);
+    return apiClient.post<SuggestionDeliveryResponse>(
+      `/routes/${routeId}/suggestions`,
+      payload,
+      'required',
+    );
   },
 };

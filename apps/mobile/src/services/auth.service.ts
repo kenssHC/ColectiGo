@@ -71,6 +71,7 @@ async function syncWithBackend(): Promise<User | null> {
   try {
     return await usersService.sync();
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.warn('No se pudo sincronizar el usuario con el backend', error);
     return null;
   }
@@ -129,7 +130,7 @@ export const authService = {
 
     const credential = await signInWithEmailAndPassword(firebaseAuth, pending.email, password);
     try {
-      await apiClient.post('/auth/google/link', { idToken: pending.idToken });
+      await apiClient.post('/auth/google/link', { idToken: pending.idToken }, 'required');
       const profile = await usersService.me();
       pendingGoogleLink = null;
       return mapFirebaseUser(credential.user, profile);
@@ -144,6 +145,12 @@ export const authService = {
   },
 
   async signOut(): Promise<void> {
+    pendingGoogleLink = null;
+    await Promise.allSettled([googleSignInService.signOut(), signOut(firebaseAuth)]);
+  },
+
+  async deleteAccount(): Promise<void> {
+    await usersService.deleteMe();
     pendingGoogleLink = null;
     await Promise.allSettled([googleSignInService.signOut(), signOut(firebaseAuth)]);
   },

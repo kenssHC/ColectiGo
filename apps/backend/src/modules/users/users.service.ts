@@ -1,10 +1,12 @@
 import {
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { QueryFailedError, Repository } from 'typeorm';
+import { QueryFailedError } from 'typeorm';
+import type { Repository } from 'typeorm';
 import { UserEntity } from './entities/user.entity';
 import type { CreateUserDto } from './dto/create-user.dto';
 import type { AuthMethod } from '@collectigo/shared';
@@ -12,6 +14,12 @@ import { AuthIdentityEntity } from '../auth/entities/auth-identity.entity';
 import { AuthService } from '../auth/auth.service';
 
 const PG_UNIQUE_VIOLATION = '23505';
+
+export type UserProfile = UserEntity & {
+  authMethods: AuthMethod[];
+  avatarUrl: string | null;
+  emailVerified: boolean;
+};
 
 function isUniqueViolation(error: unknown): boolean {
   return (
@@ -28,7 +36,7 @@ export class UsersService {
     private readonly userRepository: Repository<UserEntity>,
     @InjectRepository(AuthIdentityEntity)
     private readonly identityRepository: Repository<AuthIdentityEntity>,
-    private readonly authService: AuthService,
+    @Inject(AuthService) private readonly authService: AuthService,
   ) {}
 
   async createOrFind(dto: CreateUserDto): Promise<UserEntity> {
@@ -74,7 +82,7 @@ export class UsersService {
     return user;
   }
 
-  async getProfile(firebaseUid: string) {
+  async getProfile(firebaseUid: string): Promise<UserProfile> {
     const user = await this.findByFirebaseUid(firebaseUid);
     const [identities, firebaseUser] = await Promise.all([
       this.identityRepository.find({ where: { userId: user.id } }),
@@ -104,5 +112,14 @@ export class UsersService {
       avatarUrl: firebaseUser?.photoURL ?? null,
       emailVerified: firebaseUser?.emailVerified ?? false,
     };
+  }
+
+  /**
+   * Borra primero los datos locales. Si Firebase falla, el usuario conserva una
+   * sesión válida para reintentar; ambas operaciones son idempotentes.
+   */
+  async deleteAccount(firebaseUid: string): Promise<void> {
+    await this.userRepository.delete({ firebaseUid });
+    await this.authService.deleteUser(firebaseUid);
   }
 }

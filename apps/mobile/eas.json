@@ -9,6 +9,10 @@
       "developmentClient": true,
       "distribution": "internal",
       "environment": "development",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "development",
+        "EXPO_PUBLIC_ADS_ENABLED": "true"
+      },
       "android": {
         "buildType": "apk"
       }
@@ -17,13 +21,20 @@
       "pnpm": "10.32.1",
       "distribution": "internal",
       "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "preview"
+      },
       "android": {
         "buildType": "apk"
       }
     },
     "production": {
       "pnpm": "10.32.1",
-      "environment": "production"
+      "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_ADS_ENABLED": "false"
+      }
     }
   }
 }

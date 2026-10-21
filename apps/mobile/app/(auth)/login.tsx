@@ -11,18 +11,26 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { GoogleAuthButton } from '../../src/components/auth/GoogleAuthButton';
 import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
 import { ErrorBanner } from '../../src/components/ui/ErrorBanner';
+import { LegalLinks } from '../../src/components/legal/LegalLinks';
 import { authService, getAuthErrorMessage } from '../../src/services/auth.service';
 import { useAuthStore } from '../../src/stores/auth.store';
 import { colors } from '../../src/theme/tokens';
+import {
+  authenticatedDestination,
+  parseAuthReturnPath,
+  registerHref,
+} from '../../src/utils/auth-navigation';
 
 export default function LoginScreen(): ReactElement {
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ returnTo?: string | string[] }>();
+  const returnTo = parseAuthReturnPath(params.returnTo);
   const initialGoogleLink = authService.getPendingGoogleLink();
   const [email, setEmail] = useState(initialGoogleLink?.email ?? '');
   const [password, setPassword] = useState('');
@@ -49,6 +57,7 @@ export default function LoginScreen(): ReactElement {
         ? await authService.linkGoogleWithPassword(password)
         : await authService.signIn(email, password);
       setUser(user);
+      router.replace(authenticatedDestination(returnTo));
     } catch (error) {
       setErrorMessage(getAuthErrorMessage(error, 'No se pudo iniciar sesión. Intenta nuevamente'));
     } finally {
@@ -80,6 +89,7 @@ export default function LoginScreen(): ReactElement {
       }
 
       setUser(result.user);
+      router.replace(authenticatedDestination(returnTo));
     } catch (error) {
       setErrorMessage(
         getAuthErrorMessage(error, 'No se pudo continuar con Google. Intenta nuevamente'),
@@ -256,13 +266,26 @@ export default function LoginScreen(): ReactElement {
 
               <TouchableOpacity
                 className="py-3 items-center"
-                onPress={() => router.push('/(auth)/register')}
+                onPress={() => router.push(registerHref(returnTo ?? undefined))}
                 accessibilityRole="button"
               >
                 <Text className="text-gray-500 text-sm">
                   ¿No tienes cuenta? <Text className="text-blue-700 font-semibold">Regístrate</Text>
                 </Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                className="py-3 items-center"
+                onPress={() => router.replace('/(tabs)/map')}
+                accessibilityRole="button"
+                accessibilityLabel="Continuar sin iniciar sesión"
+              >
+                <Text className="text-slate-600 text-sm font-semibold">
+                  Continuar como invitado
+                </Text>
+              </TouchableOpacity>
+
+              <LegalLinks context="login" />
             </View>
           </View>
         </ScrollView>

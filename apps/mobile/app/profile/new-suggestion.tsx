@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import {
   Alert,
+  ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -13,7 +14,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { SuggestionType, TransportRoute } from '@collectigo/shared';
 import { Button } from '../../src/components/ui/Button';
@@ -21,9 +22,12 @@ import { ErrorBanner } from '../../src/components/ui/ErrorBanner';
 import { Input } from '../../src/components/ui/Input';
 import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
 import { ScreenState } from '../../src/components/ui/ScreenState';
+import { LegalLinks } from '../../src/components/legal/LegalLinks';
 import { routesService } from '../../src/services/routes.service';
 import { suggestionsService } from '../../src/services/suggestions.service';
 import { colors } from '../../src/theme/tokens';
+import { useAuthStore } from '../../src/stores/auth.store';
+import { loginHref } from '../../src/utils/auth-navigation';
 
 const MAX_DESCRIPTION_LENGTH = 1000;
 
@@ -72,6 +76,7 @@ function RouteRow({ route, isSelected, onPress }: RouteRowProps): ReactElement {
 
 export default function NewSuggestionScreen(): ReactElement {
   const insets = useSafeAreaInsets();
+  const { user, isLoading: isAuthLoading } = useAuthStore();
   const [routes, setRoutes] = useState<TransportRoute[]>([]);
   const [isLoadingRoutes, setIsLoadingRoutes] = useState(true);
   const [routeId, setRouteId] = useState<string | null>(null);
@@ -95,8 +100,8 @@ export default function NewSuggestionScreen(): ReactElement {
   }, []);
 
   useEffect(() => {
-    void loadRoutes();
-  }, [loadRoutes]);
+    if (user) void loadRoutes();
+  }, [loadRoutes, user]);
 
   const selectedRoute = routes.find((route) => route.id === routeId) ?? null;
   const filteredRoutes = useMemo(() => {
@@ -139,6 +144,18 @@ export default function NewSuggestionScreen(): ReactElement {
     setRouteId(route.id);
     setIsPickerOpen(false);
     setRouteQuery('');
+  }
+
+  if (isAuthLoading) {
+    return (
+      <View className="flex-1 bg-slate-50 items-center justify-center">
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (!user) {
+    return <Redirect href={loginHref('/profile/new-suggestion')} />;
   }
 
   return (
@@ -255,6 +272,8 @@ export default function NewSuggestionScreen(): ReactElement {
               {description.length}/{MAX_DESCRIPTION_LENGTH}
             </Text>
           </View>
+
+          <LegalLinks context="suggestion" />
 
           <Button
             label="Enviar sugerencia"

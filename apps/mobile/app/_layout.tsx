@@ -40,8 +40,6 @@ export default function RootLayout(): ReactElement {
     const isInAuthGroup = topLevelSegment === '(auth)';
     if (user && isInAuthGroup) {
       router.replace('/(tabs)/map');
-    } else if (!user && !isInAuthGroup) {
-      router.replace('/(auth)/login');
     }
   }, [user, isLoading, isAuthOperationInProgress, segments]);
 

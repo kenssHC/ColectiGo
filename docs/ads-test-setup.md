@@ -17,13 +17,17 @@ identificadores oficiales de prueba de Google; no generan ingresos.
   cada sesión queda libre.
 - Las solicitudes son no personalizadas y no incluyen origen, destino ni GPS.
 
-Para deshabilitar completamente la integración durante una prueba local:
+La integración está apagada por defecto. Para habilitar anuncios de prueba
+durante una sesión local:
 
 ```dotenv
-EXPO_PUBLIC_ADS_ENABLED=false
+EXPO_PUBLIC_APP_ENV=development
+EXPO_PUBLIC_ADS_ENABLED=true
 ```
 
-Si la variable no existe, los anuncios de prueba están habilitados.
+`EXPO_PUBLIC_APP_ENV=production` siempre los desactiva. El perfil EAS
+`development` los habilita explícitamente; `preview` permite decidirlo mediante
+su variable de entorno y `production` los bloquea.
 
 ## Generar el nuevo development build
 

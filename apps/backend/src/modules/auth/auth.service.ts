@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  Inject,
   Injectable,
   UnauthorizedException,
   Logger,
@@ -24,7 +25,9 @@ function firebaseErrorCode(error: unknown): string | undefined {
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    @Inject(ConfigService) private readonly configService: ConfigService,
+  ) {
     this.initializeFirebase();
   }
 
@@ -63,6 +66,15 @@ export class AuthService {
       return await admin.auth().getUser(uid);
     } catch (error) {
       if (firebaseErrorCode(error) === 'auth/user-not-found') return null;
+      throw error;
+    }
+  }
+
+  async deleteUser(uid: string): Promise<void> {
+    try {
+      await admin.auth().deleteUser(uid);
+    } catch (error) {
+      if (firebaseErrorCode(error) === 'auth/user-not-found') return;
       throw error;
     }
   }

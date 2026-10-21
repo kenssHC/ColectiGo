@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 import { UsersService } from './users.service';
@@ -11,6 +10,7 @@ type MockRepository = {
   findOne: jest.Mock;
   create: jest.Mock;
   save: jest.Mock;
+  delete: jest.Mock;
 };
 
 function makeUniqueViolation(): QueryFailedError {
@@ -23,7 +23,7 @@ function makeUniqueViolation(): QueryFailedError {
 describe('UsersService', () => {
   let repository: MockRepository;
   let identityRepository: { find: jest.Mock };
-  let authService: { findUserByUid: jest.Mock };
+  let authService: { findUserByUid: jest.Mock; deleteUser: jest.Mock };
   let service: UsersService;
 
   const dto = {
@@ -39,9 +39,13 @@ describe('UsersService', () => {
       findOne: jest.fn(),
       create: jest.fn((input) => input),
       save: jest.fn(),
+      delete: jest.fn().mockResolvedValue({ affected: 1 }),
     };
     identityRepository = { find: jest.fn().mockResolvedValue([]) };
-    authService = { findUserByUid: jest.fn().mockResolvedValue(null) };
+    authService = {
+      findUserByUid: jest.fn().mockResolvedValue(null),
+      deleteUser: jest.fn().mockResolvedValue(undefined),
+    };
     service = new UsersService(
       repository as unknown as Repository<UserEntity>,
       identityRepository as unknown as Repository<AuthIdentityEntity>,
@@ -131,6 +135,27 @@ describe('UsersService', () => {
       expect(result.authMethods).toEqual(['password', 'google']);
       expect(result.avatarUrl).toBe('https://example.com/avatar.png');
       expect(result.emailVerified).toBe(true);
+    });
+  });
+
+  describe('deleteAccount', () => {
+    it('elimina los datos locales antes de borrar la cuenta de Firebase', async () => {
+      await service.deleteAccount('uid-1');
+
+      expect(repository.delete).toHaveBeenCalledWith({ firebaseUid: 'uid-1' });
+      expect(authService.deleteUser).toHaveBeenCalledWith('uid-1');
+      expect(repository.delete.mock.invocationCallOrder[0]).toBeLessThan(
+        authService.deleteUser.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('no borra Firebase si falla la eliminación local', async () => {
+      repository.delete.mockRejectedValueOnce(new Error('database error'));
+
+      await expect(service.deleteAccount('uid-1')).rejects.toThrow(
+        'database error',
+      );
+      expect(authService.deleteUser).not.toHaveBeenCalled();
     });
   });
 });
