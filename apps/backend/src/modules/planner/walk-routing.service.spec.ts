@@ -56,7 +56,10 @@ describe('WalkRoutingService', () => {
       ],
     });
 
-    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const fetchCalls = fetchMock.mock.calls as unknown as Array<
+      [string, RequestInit]
+    >;
+    const request = fetchCalls[0][1];
     expect(JSON.parse(request.body as string)).toMatchObject({
       travelMode: 'WALK',
       polylineEncoding: 'GEO_JSON_LINESTRING',
@@ -112,5 +115,59 @@ describe('WalkRoutingService', () => {
       ),
     ).resolves.toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('limita a cuatro las solicitudes simultáneas a Google', async () => {
+    let releaseRequests: (() => void) | undefined;
+    const requestGate = new Promise<void>((resolve) => {
+      releaseRequests = resolve;
+    });
+    let activeRequests = 0;
+    let maximumActiveRequests = 0;
+    const fetchMock = jest.fn().mockImplementation(async () => {
+      activeRequests++;
+      maximumActiveRequests = Math.max(maximumActiveRequests, activeRequests);
+      await requestGate;
+      activeRequests--;
+      return {
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          routes: [
+            {
+              distanceMeters: 180,
+              polyline: {
+                geoJsonLinestring: {
+                  coordinates: [
+                    [-75.2, -12.06],
+                    [-75.201, -12.061],
+                  ],
+                },
+              },
+            },
+          ],
+        }),
+      };
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const service = new WalkRoutingService(
+      config({
+        'planner.walkRoutingProvider': 'google',
+        'planner.googleRoutesApiKey': 'test-key',
+      }),
+    );
+
+    const requests = Array.from({ length: 6 }, (_, index) =>
+      service.getWalkPath(
+        { lat: -12.06, lng: -75.2 },
+        { lat: -12.061 - index * 0.001, lng: -75.201 },
+      ),
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    releaseRequests?.();
+    await Promise.all(requests);
+
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(maximumActiveRequests).toBe(4);
   });
 });

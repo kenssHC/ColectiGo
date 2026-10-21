@@ -5,11 +5,8 @@ const REQUIRED_VARS = [
 ];
 
 const PRODUCTION_REQUIRED_VARS = [
-  'DATABASE_HOST',
-  'DATABASE_PORT',
-  'DATABASE_USER',
-  'DATABASE_PASSWORD',
-  'DATABASE_NAME',
+  'DATABASE_SSL',
+  'DATABASE_POOL_SIZE',
   'GOOGLE_AUTH_WEB_CLIENT_ID',
   'CORS_ORIGINS',
   'WALK_ROUTING_PROVIDER',
@@ -22,6 +19,13 @@ const PRODUCTION_REQUIRED_VARS = [
 ];
 
 const WALK_ROUTING_PROVIDERS = new Set(['osrm', 'google', 'none']);
+const BOOLEAN_VALUES = new Set(['true', 'false']);
+const DATABASE_REQUIRED_COMPONENT_VARS = [
+  'DATABASE_PORT',
+  'DATABASE_USER',
+  'DATABASE_PASSWORD',
+  'DATABASE_NAME',
+] as const;
 const PUBLIC_DEVELOPMENT_ROUTING_HOSTS = new Set([
   'routing.openstreetmap.de',
   'router.project-osrm.org',
@@ -58,6 +62,43 @@ export function validateEnv(
     );
   }
 
+  if (
+    config.NODE_ENV === 'production' &&
+    !envString(config.DATABASE_URL).trim()
+  ) {
+    const missingDatabaseComponents: string[] =
+      DATABASE_REQUIRED_COMPONENT_VARS.filter(
+        (key) => !envString(config[key]).trim(),
+      );
+    if (
+      !envString(config.DATABASE_HOST).trim() &&
+      !envString(config.DATABASE_SOCKET).trim()
+    ) {
+      missingDatabaseComponents.unshift('DATABASE_HOST o DATABASE_SOCKET');
+    }
+    if (missingDatabaseComponents.length > 0) {
+      throw new Error(
+        'Configura DATABASE_URL o todos los campos de conexión: ' +
+          missingDatabaseComponents.join(', '),
+      );
+    }
+  }
+
+  const databaseUrl = envString(config.DATABASE_URL).trim();
+  if (databaseUrl) {
+    let parsedDatabaseUrl: URL;
+    try {
+      parsedDatabaseUrl = new URL(databaseUrl);
+    } catch {
+      throw new Error('DATABASE_URL debe ser una URL válida de PostgreSQL');
+    }
+    if (!['postgres:', 'postgresql:'].includes(parsedDatabaseUrl.protocol)) {
+      throw new Error(
+        'DATABASE_URL debe usar el protocolo postgres o postgresql',
+      );
+    }
+  }
+
   const port = config.PORT;
   if (port !== undefined && Number.isNaN(parseInt(envString(port), 10))) {
     throw new Error(`PORT debe ser un número, se recibió: ${envString(port)}`);
@@ -71,6 +112,31 @@ export function validateEnv(
     throw new Error(
       `SMTP_PORT debe ser un número, se recibió: ${envString(smtpPort)}`,
     );
+  }
+
+  const databasePoolSize = envString(config.DATABASE_POOL_SIZE).trim();
+  if (
+    databasePoolSize &&
+    (!/^\d+$/.test(databasePoolSize) ||
+      Number(databasePoolSize) < 1 ||
+      Number(databasePoolSize) > 100)
+  ) {
+    throw new Error('DATABASE_POOL_SIZE debe ser un entero entre 1 y 100');
+  }
+
+  for (const key of ['DATABASE_SSL', 'DATABASE_SSL_REJECT_UNAUTHORIZED']) {
+    if (
+      config[key] !== undefined &&
+      !BOOLEAN_VALUES.has(envString(config[key]).trim().toLowerCase())
+    ) {
+      throw new Error(`${key} debe ser true o false`);
+    }
+  }
+
+  const databaseSslEnabled =
+    envString(config.DATABASE_SSL).trim().toLowerCase() === 'true';
+  if (envString(config.DATABASE_SSL_CA).trim() && !databaseSslEnabled) {
+    throw new Error('DATABASE_SSL_CA requiere DATABASE_SSL=true');
   }
 
   if (
@@ -103,6 +169,16 @@ export function validateEnv(
   }
 
   if (config.NODE_ENV === 'production') {
+    if (
+      databaseSslEnabled &&
+      envString(config.DATABASE_SSL_REJECT_UNAUTHORIZED)
+        .trim()
+        .toLowerCase() === 'false'
+    ) {
+      throw new Error(
+        'DATABASE_SSL_REJECT_UNAUTHORIZED no puede ser false en producción',
+      );
+    }
     const corsOrigins = envString(config.CORS_ORIGINS)
       .split(',')
       .map((origin) => origin.trim());

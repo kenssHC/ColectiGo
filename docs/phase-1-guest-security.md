@@ -6,7 +6,7 @@
 - Login solicitado solamente para funciones personales.
 - Retorno al formulario de sugerencias después de autenticarse.
 - Cliente HTTP separado entre endpoints públicos y autenticados.
-- Anuncios de prueba desactivados por defecto y bloqueados en producción.
+- Primera versión sin SDK publicitario ni anuncios.
 - Selector de ruteo peatonal `osrm`, `google` o `none`.
 - SMTP con TLS 1.2 como mínimo y TLS obligatorio en producción.
 - Eliminación de cuenta local, identidades Google y Firebase Authentication.
@@ -31,12 +31,7 @@ En `apps/mobile/.env`:
 
 ```dotenv
 EXPO_PUBLIC_APP_ENV=development
-EXPO_PUBLIC_ADS_ENABLED=false
 ```
-
-Para probar publicidad utiliza `true`; siempre se mantienen los IDs oficiales
-de prueba. Cambiar estas variables JavaScript no requiere recompilar el APK,
-pero sí reiniciar Metro.
 
 ## Prueba manual local
 
@@ -95,8 +90,9 @@ despliegue requerirá:
 - `WALK_ROUTING_PROVIDER=google` y una `GOOGLE_ROUTES_API_KEY` restringida, o un
   OSRM privado con HTTPS.
 - Orígenes CORS específicos; `*` es rechazado.
-- PostgreSQL administrado y todas sus variables explícitas.
+- PostgreSQL administrado mediante `DATABASE_URL` o variables individuales, con
+  `DATABASE_SSL` según la red del proveedor.
 - SMTP dedicado con usuario, contraseña y `SMTP_REQUIRE_TLS=true`.
-- `EXPO_PUBLIC_APP_ENV=production` y anuncios desactivados.
+- `EXPO_PUBLIC_APP_ENV=production` y ausencia del SDK publicitario.
 - Una URL pública externa para solicitar eliminación de cuenta, exigida por
   Google Play además del botón incluido en la app.

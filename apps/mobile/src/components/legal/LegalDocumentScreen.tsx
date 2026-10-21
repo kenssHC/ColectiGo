@@ -3,14 +3,11 @@ import { Alert, Linking, Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import type { LegalSection } from '@collectigo/shared';
 import { ScreenHeader } from '../ui/ScreenHeader';
 import { colors } from '../../theme/tokens';
 
-export interface LegalSection {
-  title: string;
-  paragraphs?: string[];
-  bullets?: string[];
-}
+export type { LegalSection } from '@collectigo/shared';
 
 interface LegalDocumentScreenProps {
   title: string;

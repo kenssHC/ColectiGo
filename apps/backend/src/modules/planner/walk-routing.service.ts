@@ -37,6 +37,7 @@ type WalkRoutingProvider = 'osrm' | 'google' | 'none';
 
 const REQUEST_TIMEOUT_MS = 4_000;
 const CACHE_MAX_ENTRIES = 500;
+const MAX_CONCURRENT_GOOGLE_REQUESTS = 4;
 /** Caminatas muy cortas no justifican la llamada externa: la recta es suficiente. */
 const MIN_WALK_METERS = 30;
 
@@ -53,6 +54,8 @@ export class WalkRoutingService {
   private readonly baseUrl: string;
   private readonly googleApiKey: string;
   private readonly cache = new Map<string, Promise<WalkPath | null>>();
+  private readonly googleWaiters: Array<() => void> = [];
+  private activeGoogleRequests = 0;
 
   constructor(@Inject(ConfigService) config: ConfigService) {
     const configuredProvider =
@@ -106,8 +109,24 @@ export class WalkRoutingService {
     to: LatLng,
   ): Promise<WalkPath | null> {
     return this.provider === 'google'
-      ? this.fetchGoogleWalkPath(from, to)
+      ? this.withGoogleConcurrency(() => this.fetchGoogleWalkPath(from, to))
       : this.fetchOsrmWalkPath(from, to);
+  }
+
+  private async withGoogleConcurrency<T>(
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    if (this.activeGoogleRequests >= MAX_CONCURRENT_GOOGLE_REQUESTS) {
+      await new Promise<void>((resolve) => this.googleWaiters.push(resolve));
+    }
+
+    this.activeGoogleRequests++;
+    try {
+      return await operation();
+    } finally {
+      this.activeGoogleRequests--;
+      this.googleWaiters.shift()?.();
+    }
   }
 
   private async fetchOsrmWalkPath(

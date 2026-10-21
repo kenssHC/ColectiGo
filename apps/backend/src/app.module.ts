@@ -1,4 +1,5 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { Module } from '@nestjs/common';
+import type { MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -25,6 +26,7 @@ import { CompanyEntity } from './modules/routes/entities/company.entity';
 import { FleetEntity } from './modules/routes/entities/fleet.entity';
 import { RoutePathEntity } from './modules/routes/entities/route-path.entity';
 import { AuthIdentityEntity } from './modules/auth/entities/auth-identity.entity';
+import type { DatabaseConnectionSettings } from './config/database-connection';
 
 @Module({
   imports: [
@@ -48,26 +50,37 @@ import { AuthIdentityEntity } from './modules/auth/entities/auth-identity.entity
     ]),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        host: config.get<string>('database.host'),
-        port: config.get<number>('database.port'),
-        username: config.get<string>('database.username'),
-        password: config.get<string>('database.password'),
-        database: config.get<string>('database.database'),
-        entities: [
-          UserEntity,
-          RouteEntity,
-          RouteSuggestion,
-          CompanyEntity,
-          FleetEntity,
-          RoutePathEntity,
-          AuthIdentityEntity,
-        ],
-        // El esquema se gestiona con migraciones: pnpm --filter backend migration:run
-        synchronize: false,
-        logging: config.get<string>('app.nodeEnv') === 'development',
-      }),
+      useFactory: (config: ConfigService) => {
+        const database =
+          config.getOrThrow<DatabaseConnectionSettings>('database');
+
+        return {
+          type: 'postgres' as const,
+          ...(database.url
+            ? { url: database.url }
+            : {
+                host: database.host,
+                port: database.port,
+                username: database.username,
+                password: database.password,
+                database: database.database,
+              }),
+          ssl: database.ssl,
+          poolSize: database.poolSize,
+          entities: [
+            UserEntity,
+            RouteEntity,
+            RouteSuggestion,
+            CompanyEntity,
+            FleetEntity,
+            RoutePathEntity,
+            AuthIdentityEntity,
+          ],
+          // El esquema se gestiona con migraciones: pnpm --filter backend migration:run
+          synchronize: false,
+          logging: config.get<string>('app.nodeEnv') === 'development',
+        };
+      },
     }),
     AuthModule,
     UsersModule,

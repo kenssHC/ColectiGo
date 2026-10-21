@@ -62,12 +62,14 @@ No se requiere reconstruir el development build porque son cambios JavaScript.
 
 ## Publicación web requerida
 
-Antes de generar una build de producción se necesitan dos páginas HTTPS:
+Antes de generar una build de producción se necesitan páginas HTTPS públicas:
 
 1. **Política de privacidad:** página HTML pública, legible sin autenticación,
    no geobloqueada y no editable por los visitantes. No debe ser solamente un PDF.
 2. **Eliminación de cuenta:** página externa desde la que una persona pueda pedir
    la eliminación de su cuenta y datos aunque no tenga la app instalada.
+3. **Términos de uso:** no sustituye los dos recursos exigidos por Google Play,
+   pero mantiene accesibles públicamente las condiciones mostradas en la app.
 
 Google Play también exige que la política esté enlazada dentro de la app y que las
 aplicaciones con creación de cuenta tengan eliminación tanto dentro de la app como
@@ -82,6 +84,17 @@ Cuando existan las páginas, configurar:
 EXPO_PUBLIC_PRIVACY_POLICY_URL=https://dominio.example/privacidad
 EXPO_PUBLIC_ACCOUNT_DELETION_URL=https://dominio.example/eliminar-cuenta
 ```
+
+El repositorio genera las tres páginas desde el mismo contenido de la app:
+
+```powershell
+pnpm.cmd legal:build
+```
+
+La salida queda en `hosting/`, está ignorada por Git porque contiene el nombre y
+los correos públicos configurados, y se publica mediante Firebase Hosting. El
+procedimiento completo y los comandos de vista previa están en
+[`production-infrastructure.md`](production-infrastructure.md#12-páginas-legales-y-build-móvil).
 
 ## Producción en EAS
 
@@ -116,9 +129,14 @@ HTTPS.
 | Logs operativos                 |                  30 días | Configurar en el proveedor de backend                  |
 | Logs de seguridad               |                  90 días | Configurar en el proveedor de backend                  |
 
-No se debe afirmar que los tres últimos plazos están automatizados hasta elegir y
-configurar los proveedores. La persona responsable debe realizar el borrado
-manual mientras no existan reglas automáticas.
+La infraestructura inicial elegida está documentada en
+[`production-infrastructure.md`](production-infrastructure.md). Cloud Logging
+debe conservar los logs operativos durante 30 días; si se separan logs de
+seguridad, su bucket tendrá una retención de 90 días. Resend conserva contenido
+y logs de correo durante 30 días, por debajo del máximo declarado. El buzón que
+recibe sugerencias debe eliminar los mensajes al cumplir 90 días; mientras no
+exista una regla automática, la persona responsable realizará una revisión y
+eliminación manual mensual.
 
 ## Audiencia en Google Play
 
@@ -163,9 +181,10 @@ datos, transferencias y atención formal de derechos.
 ## Pendiente antes de producción
 
 - Crear los buzones públicos.
-- Elegir proveedores y regiones de infraestructura, almacenamiento y correo.
+- Crear y configurar Google Cloud, Resend, Firebase Hosting y Cloudflare DNS.
 - Aplicar las reglas de retención aceptadas.
-- Publicar las dos páginas web HTTPS.
-- Identificar en la política los proveedores y regiones definitivos.
+- Publicar las páginas web HTTPS de privacidad, términos y eliminación.
+- Confirmar que la política describa correctamente las categorías de
+  destinatarios y las transferencias internacionales del despliegue final.
 - Obtener revisión jurídica del contenido.
 - Completar Data Safety de Google Play con el comportamiento del AAB final.

@@ -144,6 +144,79 @@ describe('PlannerService', () => {
     return options.find((o) => o.steps.some((s) => s.type === 'transfer'));
   }
 
+  interface RefinementCandidate {
+    id: number;
+  }
+
+  function plannerResult(id: number): PlannerResult {
+    return {
+      steps: [],
+      totalDistance: id,
+      totalDuration: id,
+      totalFare: 0,
+    };
+  }
+
+  function refinementInternals(service: PlannerService): {
+    refineTransitCandidates: (
+      candidates: RefinementCandidate[],
+      from: LatLng,
+      to: LatLng,
+    ) => Promise<PlannerResult[]>;
+    buildTransitResult: (
+      candidate: RefinementCandidate,
+      from: LatLng,
+      to: LatLng,
+    ) => Promise<PlannerResult | null>;
+  } {
+    return service as unknown as ReturnType<typeof refinementInternals>;
+  }
+
+  it('refina solo los cuatro candidatos que puede mostrar normalmente', async () => {
+    const internal = refinementInternals(buildService([]));
+    const candidates = Array.from({ length: 8 }, (_, id) => ({ id }));
+    const refineSpy = jest
+      .spyOn(internal, 'buildTransitResult')
+      .mockImplementation((candidate) =>
+        Promise.resolve(plannerResult(candidate.id)),
+      );
+
+    const results = await internal.refineTransitCandidates(
+      candidates,
+      origin,
+      destination,
+    );
+
+    expect(results).toHaveLength(4);
+    expect(refineSpy).toHaveBeenCalledTimes(4);
+    expect(refineSpy.mock.calls.map(([candidate]) => candidate.id)).toEqual([
+      0, 1, 2, 3,
+    ]);
+  });
+
+  it('consulta reservas solo para reemplazar finalistas inválidos', async () => {
+    const internal = refinementInternals(buildService([]));
+    const candidates = Array.from({ length: 8 }, (_, id) => ({ id }));
+    const refineSpy = jest
+      .spyOn(internal, 'buildTransitResult')
+      .mockImplementation((candidate) =>
+        Promise.resolve(
+          candidate.id === 1 || candidate.id === 3
+            ? null
+            : plannerResult(candidate.id),
+        ),
+      );
+
+    const results = await internal.refineTransitCandidates(
+      candidates,
+      origin,
+      destination,
+    );
+
+    expect(results.map((result) => result.totalDistance)).toEqual([0, 2, 4, 5]);
+    expect(refineSpy).toHaveBeenCalledTimes(6);
+  });
+
   it('devuelve respuesta vacía sin rutas y con destino lejos para caminar', async () => {
     const service = buildService([]);
     const farAway: LatLng = { lat: 0.05, lng: 0 }; // ~5.5 km

@@ -9,11 +9,10 @@ const firebaseConfig = {
 const productionConfig = {
   ...firebaseConfig,
   NODE_ENV: 'production',
-  DATABASE_HOST: '/cloudsql/project:region:instance',
-  DATABASE_PORT: '5432',
-  DATABASE_USER: 'collectigo',
-  DATABASE_PASSWORD: 'secret',
-  DATABASE_NAME: 'collectigo',
+  DATABASE_URL:
+    'postgresql://collectigo:secret@database.internal:5432/collectigo',
+  DATABASE_SSL: 'false',
+  DATABASE_POOL_SIZE: '4',
   GOOGLE_AUTH_WEB_CLIENT_ID: 'client.apps.googleusercontent.com',
   CORS_ORIGINS: 'https://collectigo.example',
   WALK_ROUTING_PROVIDER: 'google',
@@ -61,6 +60,60 @@ describe('validateEnv', () => {
     expect(() =>
       validateEnv({ ...productionConfig, SMTP_REQUIRE_TLS: 'false' }),
     ).toThrow('SMTP_REQUIRE_TLS debe ser true en producción');
+  });
+
+  it('acepta campos individuales cuando no se proporciona DATABASE_URL', () => {
+    const withoutUrl = Object.fromEntries(
+      Object.entries(productionConfig).filter(
+        ([key]) => key !== 'DATABASE_URL',
+      ),
+    );
+    expect(
+      validateEnv({
+        ...withoutUrl,
+        DATABASE_HOST: 'database.internal',
+        DATABASE_PORT: '5432',
+        DATABASE_USER: 'collectigo',
+        DATABASE_PASSWORD: 'secret',
+        DATABASE_NAME: 'collectigo',
+      }),
+    ).toBeDefined();
+  });
+
+  it('acepta el socket Unix de Cloud SQL en lugar de un host', () => {
+    const withoutUrl = Object.fromEntries(
+      Object.entries(productionConfig).filter(
+        ([key]) => key !== 'DATABASE_URL',
+      ),
+    );
+
+    expect(
+      validateEnv({
+        ...withoutUrl,
+        DATABASE_SOCKET:
+          '/cloudsql/collectigo:southamerica-west1:collectigo-db',
+        DATABASE_PORT: '5432',
+        DATABASE_USER: 'collectigo',
+        DATABASE_PASSWORD: 'secret',
+        DATABASE_NAME: 'collectigo',
+      }),
+    ).toBeDefined();
+  });
+
+  it('rechaza conexiones TLS inseguras en producción', () => {
+    expect(() =>
+      validateEnv({
+        ...productionConfig,
+        DATABASE_SSL: 'true',
+        DATABASE_SSL_REJECT_UNAUTHORIZED: 'false',
+      }),
+    ).toThrow('DATABASE_SSL_REJECT_UNAUTHORIZED no puede ser false');
+  });
+
+  it('rechaza un pool de base de datos inválido', () => {
+    expect(() =>
+      validateEnv({ ...productionConfig, DATABASE_POOL_SIZE: '0' }),
+    ).toThrow('DATABASE_POOL_SIZE debe ser un entero entre 1 y 100');
   });
 
   it('acepta una configuración de producción con Google Routes', () => {

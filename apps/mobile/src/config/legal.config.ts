@@ -1,3 +1,5 @@
+import { LEGAL_EFFECTIVE_DATE_LABEL, LEGAL_POLICY_VERSION } from '@collectigo/shared';
+
 const DEVELOPMENT_RESPONSIBLE_NAME = 'ColectiGO';
 
 export interface LegalEnvironment {
@@ -15,8 +17,8 @@ export interface LegalConfig {
   privacyPolicyUrl: string;
   accountDeletionUrl: string;
   audienceLabel: '18+';
-  policyVersion: '2026-10-17';
-  effectiveDateLabel: '17 de octubre de 2026';
+  policyVersion: typeof LEGAL_POLICY_VERSION;
+  effectiveDateLabel: typeof LEGAL_EFFECTIVE_DATE_LABEL;
 }
 
 function clean(value: string | undefined): string {
@@ -32,8 +34,8 @@ export function createLegalConfig(environment: LegalEnvironment): LegalConfig {
     privacyPolicyUrl: clean(environment.EXPO_PUBLIC_PRIVACY_POLICY_URL),
     accountDeletionUrl: clean(environment.EXPO_PUBLIC_ACCOUNT_DELETION_URL),
     audienceLabel: '18+',
-    policyVersion: '2026-10-17',
-    effectiveDateLabel: '17 de octubre de 2026',
+    policyVersion: LEGAL_POLICY_VERSION,
+    effectiveDateLabel: LEGAL_EFFECTIVE_DATE_LABEL,
   };
 }
 

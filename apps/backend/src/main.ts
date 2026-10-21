@@ -28,13 +28,14 @@ async function bootstrap(): Promise<void> {
 
   const corsOrigins = config.get<string>('app.corsOrigins') ?? '*';
   app.enableCors({
-    origin: corsOrigins === '*' ? true : corsOrigins.split(',').map((o) => o.trim()),
+    origin:
+      corsOrigins === '*' ? true : corsOrigins.split(',').map((o) => o.trim()),
   });
 
   app.setGlobalPrefix('api/v1');
 
   const port = config.get<number>('app.port') ?? 3000;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
 }
 
 bootstrap();

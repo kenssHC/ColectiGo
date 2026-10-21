@@ -45,19 +45,22 @@ Esto crea el contenedor `collectigo-postgres` con usuario/contraseña `postgres`
 cp apps/backend/.env.example apps/backend/.env
 ```
 
-| Variable                    | Descripción                                                      |
-| --------------------------- | ---------------------------------------------------------------- |
-| `DATABASE_*`                | Conexión a PostgreSQL                                            |
-| `FIREBASE_PROJECT_ID`       | ID del proyecto en Firebase Console                              |
-| `FIREBASE_CLIENT_EMAIL`     | Client email del service account                                 |
-| `FIREBASE_PRIVATE_KEY`      | Private key del service account (con `\n` escapados)             |
-| `GOOGLE_AUTH_WEB_CLIENT_ID` | OAuth Client ID Web para validar tokens de Google                |
-| `CORS_ORIGINS`              | Orígenes permitidos separados por coma (`*` solo en desarrollo)  |
-| `WALK_ROUTING_PROVIDER`     | `osrm`, `google` o `none`; producción no admite `none`           |
-| `WALK_ROUTING_URL`          | Endpoint de OSRM propio/proveedor; el público es solo desarrollo |
-| `GOOGLE_ROUTES_API_KEY`     | Key server-side de Routes API para calcular tiempos con tráfico  |
-| `ROUTE_SUGGESTIONS_EMAIL`   | Correo administrativo que recibe sugerencias nuevas              |
-| `SMTP_*`                    | Servidor, credenciales, TLS y remitente usados solo por backend  |
+| Variable                      | Descripción                                                      |
+| ----------------------------- | ---------------------------------------------------------------- |
+| `DATABASE_URL` / `DATABASE_*` | Conexión a PostgreSQL; la URL tiene prioridad                    |
+| `DATABASE_SOCKET`             | Socket Unix de Cloud SQL cuando se despliega en Cloud Run        |
+| `DATABASE_SSL*`               | TLS, validación y CA opcional para conexiones TCP                |
+| `DATABASE_POOL_SIZE`          | Conexiones PostgreSQL por proceso (`4` en Cloud Run inicial)     |
+| `FIREBASE_PROJECT_ID`         | ID del proyecto en Firebase Console                              |
+| `FIREBASE_CLIENT_EMAIL`       | Client email del service account                                 |
+| `FIREBASE_PRIVATE_KEY`        | Private key del service account (con `\n` escapados)             |
+| `GOOGLE_AUTH_WEB_CLIENT_ID`   | OAuth Client ID Web para validar tokens de Google                |
+| `CORS_ORIGINS`                | Orígenes permitidos separados por coma (`*` solo en desarrollo)  |
+| `WALK_ROUTING_PROVIDER`       | `osrm`, `google` o `none`; producción no admite `none`           |
+| `WALK_ROUTING_URL`            | Endpoint de OSRM propio/proveedor; el público es solo desarrollo |
+| `GOOGLE_ROUTES_API_KEY`       | Key server-side de Routes API para calcular tiempos con tráfico  |
+| `ROUTE_SUGGESTIONS_EMAIL`     | Correo administrativo que recibe sugerencias nuevas              |
+| `SMTP_*`                      | Servidor, credenciales, TLS y remitente usados solo por backend  |
 
 El backend valida las credenciales de Firebase al arrancar. En producción también
 requiere la configuración SMTP. Las sugerencias se envían por correo y no se guardan
@@ -99,7 +102,6 @@ cp apps/mobile/.env.example apps/mobile/.env
 | `EXPO_PUBLIC_FIREBASE_*`             | Configuración web de Firebase (Consola → Configuración del proyecto → Tus apps)              |
 | `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`   | OAuth Client ID Web usado por Google Sign-In; debe coincidir con el backend                  |
 | `EXPO_PUBLIC_APP_ENV`                | Entorno funcional: `development`, `preview` o `production`                                   |
-| `EXPO_PUBLIC_ADS_ENABLED`            | Activa únicamente anuncios de prueba fuera de producción                                     |
 | `EXPO_PUBLIC_LEGAL_RESPONSIBLE_NAME` | Nombre público del responsable del tratamiento                                               |
 | `EXPO_PUBLIC_PRIVACY_EMAIL`          | Correo público para privacidad y ejercicio de derechos                                       |
 | `EXPO_PUBLIC_SUPPORT_EMAIL`          | Correo público de soporte                                                                    |
@@ -144,6 +146,12 @@ faltan los correos públicos o las URLs HTTPS exigidas para publicación.
 
 La configuración, retención aprobada, publicación web y prueba manual están en
 [`docs/phase-2-legal-privacy.md`](docs/phase-2-legal-privacy.md).
+Las páginas web se generan desde el mismo contenido de la app con
+`pnpm legal:build` y se publican en Firebase Hosting.
+
+La infraestructura inicial de producción, el presupuesto y el procedimiento de
+alta manual están en
+[`docs/production-infrastructure.md`](docs/production-infrastructure.md).
 
 ### 6. Google Maps y development build
 
@@ -179,17 +187,11 @@ Para crear un APK de desarrollo en EAS se usa el perfil `development` definido e
 `apps/mobile/eas.json`. La variable `GOOGLE_MAPS_API_KEY` debe existir también en
 el entorno `development` de EAS.
 
-### 6.1 Publicidad de prueba
+### 6.1 Primera versión sin publicidad
 
-La app puede precargar un interstitial de Google Mobile Ads antes de algunas
-transiciones hacia resultados. La integración está bloqueada en IDs oficiales
-de prueba, es no personalizada y nunca impide consultar rutas si el anuncio
-falla. En producción queda desactivada aunque la variable se configure por
-error. Al ser una dependencia nativa, requiere un development build que la
-contenga.
-
-Consulta el comportamiento, los pasos de compilación y las verificaciones en
-[`docs/ads-test-setup.md`](docs/ads-test-setup.md).
+La primera versión de ColectiGO no incluye un SDK publicitario ni muestra
+anuncios. Si se evalúa monetización en el futuro, requerirá una nueva revisión
+de privacidad, experiencia de usuario y declaración en Google Play.
 
 ## Desarrollo
 
@@ -209,7 +211,7 @@ pnpm --filter @collectigo/shared build
 ## Pruebas
 
 ```bash
-pnpm --filter @collectigo/mobile test # publicidad y flujo móvil
+pnpm --filter @collectigo/mobile test # pruebas de la aplicación móvil
 pnpm --filter backend test       # unitarias
 pnpm --filter backend test:e2e   # e2e ligeras (sin BD)
 ```
@@ -260,6 +262,12 @@ refina además con Google Routes API (`DRIVE` + `TRAFFIC_AWARE`). Sin key o ante
 errores externos se usa una estimación local por distancia y hora punta. La key
 del backend debe estar restringida a Routes API y, en despliegues con IP estable,
 a la IP del servidor.
+
+Se mantiene una cola diversa de hasta ocho candidatos, pero normalmente solo se
+enriquecen los cuatro que pueden mostrarse. Los siguientes se consultan de forma
+incremental únicamente si el recorrido peatonal real invalida algún finalista.
+Las llamadas peatonales a Google y las de tráfico tienen un máximo de cuatro
+solicitudes simultáneas por proceso.
 
 El planificador admite rutas directas y viajes con un transbordo. La caminata
 entre vehículos debe ser de 150 m o menos y se valida sobre el recorrido peatonal

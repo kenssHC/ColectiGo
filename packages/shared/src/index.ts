@@ -20,3 +20,11 @@ export type {
 export type { RoutePath, TransportCompany, TransportRoute } from './interfaces/route.interface';
 export type { AuthMethod, User } from './interfaces/user.interface';
 export type { RouteSuggestion } from './interfaces/suggestion.interface';
+export {
+  LEGAL_EFFECTIVE_DATE_LABEL,
+  LEGAL_POLICY_VERSION,
+  createAccountDeletionSections,
+  createPrivacyPolicySections,
+  createTermsOfUseSections,
+} from './legal-content';
+export type { LegalContentConfig, LegalSection } from './legal-content';

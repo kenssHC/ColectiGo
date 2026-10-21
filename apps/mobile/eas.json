@@ -10,8 +10,7 @@
       "distribution": "internal",
       "environment": "development",
       "env": {
-        "EXPO_PUBLIC_APP_ENV": "development",
-        "EXPO_PUBLIC_ADS_ENABLED": "true"
+        "EXPO_PUBLIC_APP_ENV": "development"
       },
       "android": {
         "buildType": "apk"
@@ -32,8 +31,7 @@
       "pnpm": "10.32.1",
       "environment": "production",
       "env": {
-        "EXPO_PUBLIC_APP_ENV": "production",
-        "EXPO_PUBLIC_ADS_ENABLED": "false"
+        "EXPO_PUBLIC_APP_ENV": "production"
       }
     }
   }

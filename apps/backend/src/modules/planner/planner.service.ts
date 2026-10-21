@@ -39,10 +39,12 @@ const MAX_CONNECTIONS_PER_PATH_PAIR = 250;
 const MAX_DIRECT_WALK_METERS = 2_500;
 /** Caminata total máxima aceptada dentro de una opción con transporte. */
 const MAX_TRANSIT_WALK_METERS = 2_000;
-/** Cuántos candidatos de transporte se enriquecen con datos externos. */
-const MAX_ENRICHED_CANDIDATES = 8;
+/** Cola máxima de candidatos; los últimos solo se consultan si un finalista falla. */
+const MAX_EXTERNAL_CANDIDATE_ATTEMPTS = 8;
 const MAX_VARIANTS_PER_ROUTE_SEQUENCE = 2;
 const MAX_ALTERNATIVES = 3;
+/** Máximo de resultados que puede presentar la respuesta (mejor + alternativas). */
+const MAX_REFINED_RESULTS = 1 + MAX_ALTERNATIVES;
 
 /** Tramos tarifarios de las rutas TA/TAT. */
 const TA_MID_FARE_FROM_METERS = 5_000;
@@ -146,19 +148,18 @@ export class PlannerService {
     const candidates = this.buildCandidates(origin, destination, routes);
     const preselected = this.preselect(candidates, mode);
     this.debug(
-      `Planner: ${candidates.length} candidatos iniciales, ${preselected.length} candidatos refinados, ${preselected.reduce((sum, candidate) => sum + candidate.legs.length, 0)} tramos vehiculares`,
+      `Planner: ${candidates.length} candidatos iniciales, ${preselected.length} candidatos en cola para refinamiento`,
     );
 
     const directWalkDistance = this.haversine(origin, destination);
     const includeWalkOnly = directWalkDistance <= MAX_DIRECT_WALK_METERS;
 
-    const transitResults = await Promise.all(
-      preselected.map((candidate) =>
-        this.buildTransitResult(candidate, origin, destination),
-      ),
+    const transitResults = await this.refineTransitCandidates(
+      preselected,
+      origin,
+      destination,
     );
     const timeSources = transitResults
-      .filter((result): result is PlannerResult => result !== null)
       .flatMap((result) => result.steps)
       .filter((step) => step.type === 'ride')
       .reduce<Record<string, number>>((counts, step) => {
@@ -168,9 +169,10 @@ export class PlannerService {
       }, {});
     this.debug(`Planner: fuentes de tiempo ${JSON.stringify(timeSources)}`);
 
-    const options: TripOption[] = transitResults
-      .filter((result): result is PlannerResult => result !== null)
-      .map((result) => ({ result, isWalkOnly: false }));
+    const options: TripOption[] = transitResults.map((result) => ({
+      result,
+      isWalkOnly: false,
+    }));
 
     if (includeWalkOnly) {
       const walkOnly = await this.buildWalkOnlyResult(
@@ -203,7 +205,7 @@ export class PlannerService {
     const selected = selectDiversifiedRoutes(
       paretoResults,
       mode,
-      1 + MAX_ALTERNATIVES,
+      MAX_REFINED_RESULTS,
     );
     const best = selected[0];
     best.label = this.buildLabel({
@@ -450,7 +452,7 @@ export class PlannerService {
       if (
         candidate &&
         !selected.includes(candidate) &&
-        selected.length < MAX_ENRICHED_CANDIDATES
+        selected.length < MAX_EXTERNAL_CANDIDATE_ATTEMPTS
       ) {
         selected.push(candidate);
       }
@@ -493,6 +495,42 @@ export class PlannerService {
     }
 
     return selected;
+  }
+
+  /**
+   * Refina primero solo los cuatro candidatos que pueden llegar a mostrarse.
+   * Si la caminata real invalida alguno (por ejemplo, un transbordo de más de
+   * 150 m por calles), toma de la cola únicamente los reemplazos necesarios.
+   */
+  private async refineTransitCandidates(
+    candidates: TripCandidate[],
+    origin: LatLng,
+    destination: LatLng,
+  ): Promise<PlannerResult[]> {
+    const results: PlannerResult[] = [];
+    let offset = 0;
+
+    while (offset < candidates.length && results.length < MAX_REFINED_RESULTS) {
+      const missingResults = MAX_REFINED_RESULTS - results.length;
+      const batch = candidates.slice(offset, offset + missingResults);
+      offset += batch.length;
+
+      const refinedBatch = await Promise.all(
+        batch.map((candidate) =>
+          this.buildTransitResult(candidate, origin, destination),
+        ),
+      );
+      results.push(
+        ...refinedBatch.filter(
+          (result): result is PlannerResult => result !== null,
+        ),
+      );
+    }
+
+    this.debug(
+      `Planner: ${results.length} resultados refinados tras consultar ${offset} candidatos`,
+    );
+    return results;
   }
 
   private async buildTransitResult(

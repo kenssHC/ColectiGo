@@ -14,3 +14,7 @@ apps/mobile/google-services.json
 apps/mobile/GoogleService-Info.plist
 apps/backend/src/seeds/data/*
 !apps/backend/src/seeds/data/.gitkeep
+deploy/gcp/cloud-run.env.yaml
+hosting/
+.firebase/
+.firebaserc
