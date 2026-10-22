@@ -4,7 +4,9 @@ import type { FirebaseAuthPayload } from '../../modules/auth/interfaces/firebase
 
 export const CurrentUser = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext): FirebaseAuthPayload => {
-    const request = ctx.switchToHttp().getRequest<Request & { user: FirebaseAuthPayload }>();
+    const request = ctx
+      .switchToHttp()
+      .getRequest<Request & { user: FirebaseAuthPayload }>();
     return request.user;
   },
 );

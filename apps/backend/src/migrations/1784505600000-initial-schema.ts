@@ -41,7 +41,9 @@ export class InitialSchema1784505600000 implements MigrationInterface {
         CONSTRAINT "PK_routes_id" PRIMARY KEY ("id")
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_routes_status" ON "routes" ("status")`);
+    await queryRunner.query(
+      `CREATE INDEX "IDX_routes_status" ON "routes" ("status")`,
+    );
 
     await queryRunner.query(`
       CREATE TABLE "stops" (
@@ -56,7 +58,9 @@ export class InitialSchema1784505600000 implements MigrationInterface {
           REFERENCES "routes"("id") ON DELETE CASCADE ON UPDATE NO ACTION
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_stops_route_id" ON "stops" ("route_id")`);
+    await queryRunner.query(
+      `CREATE INDEX "IDX_stops_route_id" ON "stops" ("route_id")`,
+    );
 
     await queryRunner.query(
       `CREATE TYPE "public"."route_suggestions_type_enum" AS ENUM('stop_position', 'route_path', 'fare', 'schedule', 'other')`,
@@ -92,7 +96,9 @@ export class InitialSchema1784505600000 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP TABLE "route_suggestions"`);
-    await queryRunner.query(`DROP TYPE "public"."route_suggestions_status_enum"`);
+    await queryRunner.query(
+      `DROP TYPE "public"."route_suggestions_status_enum"`,
+    );
     await queryRunner.query(`DROP TYPE "public"."route_suggestions_type_enum"`);
     await queryRunner.query(`DROP TABLE "stops"`);
     await queryRunner.query(`DROP TABLE "routes"`);

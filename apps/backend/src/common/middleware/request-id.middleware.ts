@@ -8,7 +8,8 @@ export const REQUEST_ID_HEADER = 'x-request-id';
 export class RequestIdMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction): void {
     const incoming = req.header(REQUEST_ID_HEADER);
-    const requestId = incoming && incoming.trim() !== '' ? incoming.trim() : randomUUID();
+    const requestId =
+      incoming && incoming.trim() !== '' ? incoming.trim() : randomUUID();
     (req as Request & { requestId: string }).requestId = requestId;
     res.setHeader(REQUEST_ID_HEADER, requestId);
     next();

@@ -28,6 +28,9 @@ export class UserEntity {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
-  @OneToMany('RouteSuggestion', (suggestion: RouteSuggestion) => suggestion.user)
+  @OneToMany(
+    'RouteSuggestion',
+    (suggestion: RouteSuggestion) => suggestion.user,
+  )
   suggestions: RouteSuggestion[];
 }

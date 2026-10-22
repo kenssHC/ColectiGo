@@ -18,7 +18,7 @@ ColectiGO/
 
 ## Requisitos previos
 
-- Node.js 20+
+- Node.js 22 LTS
 - pnpm 10+
 - Docker (opcional, para PostgreSQL local) o PostgreSQL 15+
 - Cuenta de Firebase con Authentication (Email/Password) habilitado

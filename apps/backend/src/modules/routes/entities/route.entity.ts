@@ -17,7 +17,8 @@ import type { RouteSuggestion } from './route-suggestion.entity';
 /** El driver pg devuelve decimal como string; se normaliza a number. */
 const decimalTransformer = {
   to: (value: number): number => value,
-  from: (value: string | null): number => (value === null ? 0 : parseFloat(value)),
+  from: (value: string | null): number =>
+    value === null ? 0 : parseFloat(value),
 };
 
 @Entity('routes')
@@ -32,7 +33,12 @@ export class RouteEntity {
   @Column({ type: 'enum', enum: ['colectivo', 'auto', 'combi', 'bus'] })
   type: VehicleType;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, transformer: decimalTransformer })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    transformer: decimalTransformer,
+  })
   fare: number;
 
   @Column({ default: '#3B82F6' })
@@ -62,9 +68,14 @@ export class RouteEntity {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
-  @OneToMany('RoutePathEntity', (path: RoutePathEntity) => path.route, { cascade: true })
+  @OneToMany('RoutePathEntity', (path: RoutePathEntity) => path.route, {
+    cascade: true,
+  })
   paths: RoutePathEntity[];
 
-  @OneToMany('RouteSuggestion', (suggestion: RouteSuggestion) => suggestion.route)
+  @OneToMany(
+    'RouteSuggestion',
+    (suggestion: RouteSuggestion) => suggestion.route,
+  )
   suggestions: RouteSuggestion[];
 }

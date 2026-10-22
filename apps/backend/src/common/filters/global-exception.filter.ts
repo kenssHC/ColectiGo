@@ -19,15 +19,20 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const isProduction = process.env.NODE_ENV === 'production';
 
     const status =
-      exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+      exception instanceof HttpException
+        ? exception.getStatus()
+        : HttpStatus.INTERNAL_SERVER_ERROR;
 
     const exceptionResponse =
-      exception instanceof HttpException ? exception.getResponse() : 'Error interno del servidor';
+      exception instanceof HttpException
+        ? exception.getResponse()
+        : 'Error interno del servidor';
 
     const message =
       typeof exceptionResponse === 'string'
         ? exceptionResponse
-        : ((exceptionResponse as { message?: string | string[] }).message ?? exceptionResponse);
+        : ((exceptionResponse as { message?: string | string[] }).message ??
+          exceptionResponse);
 
     const requestId = request.requestId;
 
@@ -42,7 +47,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       path: request.url,
       requestId,
       message,
-      ...(isProduction || !(exception instanceof Error) || exception instanceof HttpException
+      ...(isProduction ||
+      !(exception instanceof Error) ||
+      exception instanceof HttpException
         ? {}
         : { error: exception.message }),
     });

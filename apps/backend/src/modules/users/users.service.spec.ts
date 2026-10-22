@@ -37,7 +37,9 @@ describe('UsersService', () => {
   beforeEach(() => {
     repository = {
       findOne: jest.fn(),
-      create: jest.fn((input) => input),
+      create: jest.fn(
+        (input: typeof dto): UserEntity => input as unknown as UserEntity,
+      ),
       save: jest.fn(),
       delete: jest.fn().mockResolvedValue({ affected: 1 }),
     };

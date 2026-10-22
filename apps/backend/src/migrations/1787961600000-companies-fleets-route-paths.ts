@@ -40,7 +40,9 @@ export class CompaniesFleetsRoutePaths1787961600000 implements MigrationInterfac
           REFERENCES "companies"("id") ON DELETE CASCADE ON UPDATE NO ACTION
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_fleets_company_id" ON "fleets" ("company_id")`);
+    await queryRunner.query(
+      `CREATE INDEX "IDX_fleets_company_id" ON "fleets" ("company_id")`,
+    );
 
     // Recrear el enum de tipo de vehículo para incluir 'combi'.
     await queryRunner.query(
@@ -54,19 +56,25 @@ export class CompaniesFleetsRoutePaths1787961600000 implements MigrationInterfac
       `ALTER TABLE "routes" ALTER COLUMN "type" TYPE "public"."routes_type_enum" USING "type"::"public"."routes_type_enum"`,
     );
 
-    await queryRunner.query(`ALTER TABLE "routes" DROP COLUMN IF EXISTS "polyline"`);
+    await queryRunner.query(
+      `ALTER TABLE "routes" DROP COLUMN IF EXISTS "polyline"`,
+    );
     await queryRunner.query(
       `ALTER TABLE "routes" ADD "start_terminal_name" character varying NOT NULL`,
     );
     await queryRunner.query(
       `ALTER TABLE "routes" ADD "end_terminal_name" character varying NOT NULL`,
     );
-    await queryRunner.query(`ALTER TABLE "routes" ADD "fleet_id" uuid NOT NULL`);
+    await queryRunner.query(
+      `ALTER TABLE "routes" ADD "fleet_id" uuid NOT NULL`,
+    );
     await queryRunner.query(`
       ALTER TABLE "routes" ADD CONSTRAINT "FK_routes_fleet" FOREIGN KEY ("fleet_id")
         REFERENCES "fleets"("id") ON DELETE CASCADE ON UPDATE NO ACTION
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_routes_fleet_id" ON "routes" ("fleet_id")`);
+    await queryRunner.query(
+      `CREATE INDEX "IDX_routes_fleet_id" ON "routes" ("fleet_id")`,
+    );
 
     await queryRunner.query(
       `CREATE TYPE "public"."route_paths_direction_enum" AS ENUM('ida', 'vuelta')`,
@@ -96,11 +104,17 @@ export class CompaniesFleetsRoutePaths1787961600000 implements MigrationInterfac
     await queryRunner.query(`DROP TYPE "public"."route_paths_direction_enum"`);
 
     await queryRunner.query(`DELETE FROM "routes"`);
-    await queryRunner.query(`ALTER TABLE "routes" DROP CONSTRAINT "FK_routes_fleet"`);
+    await queryRunner.query(
+      `ALTER TABLE "routes" DROP CONSTRAINT "FK_routes_fleet"`,
+    );
     await queryRunner.query(`DROP INDEX "public"."IDX_routes_fleet_id"`);
     await queryRunner.query(`ALTER TABLE "routes" DROP COLUMN "fleet_id"`);
-    await queryRunner.query(`ALTER TABLE "routes" DROP COLUMN "end_terminal_name"`);
-    await queryRunner.query(`ALTER TABLE "routes" DROP COLUMN "start_terminal_name"`);
+    await queryRunner.query(
+      `ALTER TABLE "routes" DROP COLUMN "end_terminal_name"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "routes" DROP COLUMN "start_terminal_name"`,
+    );
     await queryRunner.query(`ALTER TABLE "routes" ADD "polyline" text`);
 
     await queryRunner.query(
@@ -130,6 +144,8 @@ export class CompaniesFleetsRoutePaths1787961600000 implements MigrationInterfac
           REFERENCES "routes"("id") ON DELETE CASCADE ON UPDATE NO ACTION
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_stops_route_id" ON "stops" ("route_id")`);
+    await queryRunner.query(
+      `CREATE INDEX "IDX_stops_route_id" ON "stops" ("route_id")`,
+    );
   }
 }

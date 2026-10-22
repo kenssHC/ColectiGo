@@ -11,7 +11,7 @@ import { PlannerService } from './planner.service';
 import type { PlannerResponse } from '@collectigo/shared';
 // Import regular (no `import type`): la clase debe existir en runtime para que
 // emitDecoratorMetadata la registre y el ValidationPipe pueda validar el body.
-// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+
 import { CalculateRouteDto } from './dto/calculate-route.dto';
 
 @Controller('planner')

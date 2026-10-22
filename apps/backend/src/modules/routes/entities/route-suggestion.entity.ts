@@ -17,7 +17,10 @@ export class RouteSuggestion {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'enum', enum: ['stop_position', 'route_path', 'fare', 'schedule', 'other'] })
+  @Column({
+    type: 'enum',
+    enum: ['stop_position', 'route_path', 'fare', 'schedule', 'other'],
+  })
   type: SuggestionType;
 
   @Column({ type: 'text' })
