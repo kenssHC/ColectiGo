@@ -122,6 +122,8 @@ function VehicleThumbnail({ reference, size, onExpand }: VehicleThumbnailProps):
       ) : (
         <View
           className="flex-1 items-center justify-center"
+          accessible
+          accessibilityRole="image"
           accessibilityLabel={`${vehicle.label} de la ruta ${reference.routeName}, sin foto referencial`}
         >
           <Ionicons
@@ -129,7 +131,7 @@ function VehicleThumbnail({ reference, size, onExpand }: VehicleThumbnailProps):
             size={size >= 48 ? 22 : 18}
             color={colors.textSecondary}
           />
-          <Text className="mt-0.5 px-0.5 text-[9px] font-bold text-slate-700" numberOfLines={1}>
+          <Text className="mt-0.5 px-0.5 text-xs font-bold text-slate-700" numberOfLines={1}>
             {reference.routeName}
           </Text>
         </View>
@@ -267,7 +269,12 @@ export function VehicleRoutePreview({ result }: { result: PlannerResult }): Reac
 
   if (references.length === 0) {
     return (
-      <View className="w-12 h-12 rounded-full items-center justify-center bg-amber-50 border border-amber-200">
+      <View
+        className="w-12 h-12 rounded-full items-center justify-center bg-amber-50 border border-amber-200"
+        accessible
+        accessibilityRole="image"
+        accessibilityLabel="Recorrido a pie"
+      >
         <Ionicons name="walk-outline" size={21} color={colors.walk} />
       </View>
     );

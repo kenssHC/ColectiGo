@@ -33,6 +33,15 @@ const TIME_SOURCE_LABEL: Record<VehicleTimeSource, string> = {
   LOCAL_ESTIMATE: 'Tiempo estimado',
 };
 
+const BADGE_PRIORITY: PlannerBadge[] = [
+  'walk_only',
+  'fastest',
+  'cheapest',
+  'less_walking',
+  'fewer_transfers',
+  'shortest',
+];
+
 const RIDE_COLOR = colors.primary;
 
 function isWalkOnly(result: PlannerResult): boolean {
@@ -69,6 +78,11 @@ function transferLabel(count: number): string {
   return `${count} transbordo${count === 1 ? '' : 's'}`;
 }
 
+function getVisibleBadges(option: PlannerResult): PlannerBadge[] {
+  const badges = option.badges ?? [];
+  return BADGE_PRIORITY.filter((badge) => badges.includes(badge)).slice(0, 2);
+}
+
 interface OptionRowProps {
   option: PlannerResult;
   isSelected: boolean;
@@ -79,6 +93,21 @@ interface OptionRowProps {
 function OptionRow({ option, isSelected, isBest, onPress }: OptionRowProps): ReactElement {
   const transfers = getTransferCount(option);
   const walkingDistance = getWalkingDistance(option);
+  const visibleBadges = getVisibleBadges(option);
+  const badgeLabels = visibleBadges.map((badge) => BADGE_LABEL[badge]);
+  const accessibilityLabel = [
+    isBest ? 'Opción recomendada' : null,
+    isSelected ? 'Seleccionada' : null,
+    option.routeName ?? 'Opción',
+    formatDuration(option.totalDuration),
+    option.totalFare > 0 ? `Tarifa S/ ${option.totalFare.toFixed(2)}` : 'Gratis',
+    `${formatDistance(walkingDistance)} caminando`,
+    transferLabel(transfers),
+    badgeLabels.length > 0 ? `Ventajas: ${badgeLabels.join(' y ')}` : null,
+  ]
+    .filter(Boolean)
+    .join('. ');
+
   return (
     <Pressable
       className={`min-h-24 flex-row items-center gap-3 px-4 py-3 rounded-2xl border-2 ${
@@ -86,40 +115,44 @@ function OptionRow({ option, isSelected, isBest, onPress }: OptionRowProps): Rea
       } active:opacity-80`}
       onPress={onPress}
       accessibilityRole="radio"
-      accessibilityLabel={`${option.routeName ?? 'Opción'}, ${formatDuration(option.totalDuration)}, ${option.totalFare > 0 ? `S/ ${option.totalFare.toFixed(2)}` : 'gratis'}, ${formatDistance(walkingDistance)} caminando, ${transferLabel(transfers)}`}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint="Toca dos veces para mostrar esta opción en el mapa y ver sus detalles"
       accessibilityState={{ checked: isSelected }}
     >
       <VehicleRoutePreview result={option} />
 
       <View className="flex-1 gap-1">
-        <View className="flex-row items-center gap-2 flex-wrap">
-          <Text className="text-sm font-bold text-slate-900" numberOfLines={1}>
+        <View className="flex-row items-start gap-2">
+          <Text className="min-w-0 flex-1 text-sm font-bold leading-5 text-slate-900" numberOfLines={2}>
             {option.routeName ?? 'Ruta'}
           </Text>
           {isBest ? (
-            <View className="px-2 py-0.5 rounded-full bg-green-100">
+            <View className="shrink-0 px-2 py-0.5 rounded-full bg-green-100">
               <Text className="text-xs font-bold text-green-800">Recomendada</Text>
             </View>
           ) : null}
         </View>
-        <Text className="text-xs text-slate-600" numberOfLines={1}>
-          {[
-            option.companyName,
-            option.fleetNumber ? `Flota ${option.fleetNumber}` : null,
-            `${formatDistance(walkingDistance)} caminando`,
-            transferLabel(transfers),
-          ]
-            .filter(Boolean)
-            .join(' · ')}
+        <Text className="text-sm leading-5 text-slate-700">
+          {`${formatDistance(walkingDistance)} caminando · ${transferLabel(transfers)}`}
         </Text>
-        {(option.badges ?? []).length > 0 ? (
+        {option.companyName || option.fleetNumber ? (
           <Text className="text-xs text-slate-600" numberOfLines={1}>
-            {(option.badges ?? []).map((badge) => BADGE_LABEL[badge]).join(' · ')}
+            {[
+              option.companyName,
+              option.fleetNumber ? `Flota ${option.fleetNumber}` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </Text>
+        ) : null}
+        {badgeLabels.length > 0 ? (
+          <Text className="text-sm font-medium leading-5 text-blue-800">
+            {badgeLabels.join(' · ')}
           </Text>
         ) : null}
       </View>
 
-      <View className="items-end gap-1">
+      <View className="shrink-0 items-end gap-1">
         <Text className="text-lg font-bold text-slate-900">
           {formatDuration(option.totalDuration)}
         </Text>
@@ -144,6 +177,7 @@ function SummaryCard({
   const timeSource = getTimeSource(result);
   const durationComparison = getDurationComparisonMessage(result, options);
   const trafficImpact = getTrafficImpactMessage(result);
+  const hasSimilarDuration = durationComparison === 'Tiempo similar a otras opciones';
 
   return (
     <View className="mx-4 my-3 bg-white rounded-2xl border border-slate-200 overflow-hidden">
@@ -186,17 +220,26 @@ function SummaryCard({
         {durationComparison || trafficImpact ? (
           <View className="gap-2">
             {durationComparison ? (
-              <View className="flex-row gap-2 rounded-xl bg-blue-50 px-3 py-2.5">
-                <Ionicons name="time-outline" size={17} color={colors.primary} />
-                <Text className="flex-1 text-sm leading-5 text-blue-900">
-                  {durationComparison}
-                </Text>
-              </View>
+              hasSimilarDuration ? (
+                <View className="flex-row gap-2 px-1 py-1">
+                  <Ionicons name="time-outline" size={17} color={colors.textSecondary} />
+                  <Text className="flex-1 text-sm leading-5 text-slate-600">
+                    {durationComparison}
+                  </Text>
+                </View>
+              ) : (
+                <View className="flex-row gap-2 rounded-xl bg-blue-50 px-3 py-2.5">
+                  <Ionicons name="time-outline" size={17} color={colors.primary} />
+                  <Text className="flex-1 text-sm leading-5 text-blue-900">
+                    {durationComparison}
+                  </Text>
+                </View>
+              )
             ) : null}
             {trafficImpact ? (
               <View className="flex-row gap-2 rounded-xl bg-slate-100 px-3 py-2.5">
                 <Ionicons name="car-outline" size={17} color={colors.textSecondary} />
-                <Text className="flex-1 text-xs leading-5 text-slate-700">{trafficImpact}</Text>
+                <Text className="flex-1 text-sm leading-5 text-slate-700">{trafficImpact}</Text>
               </View>
             ) : null}
           </View>
@@ -214,7 +257,7 @@ function SummaryCard({
             <Text className="text-sm text-slate-700">{transferLabel(transfers)}</Text>
           </View>
           <View className="flex-row items-center gap-1.5">
-            <Ionicons name="resize-outline" size={16} color={colors.textSecondary} />
+            <Ionicons name="map-outline" size={16} color={colors.textSecondary} />
             <Text className="text-sm text-slate-700">
               {formatDistance(result.totalDistance)} en total
             </Text>
@@ -275,11 +318,10 @@ export default function ResultsScreen(): ReactElement | null {
           <ResultMap result={selected} rideColor={RIDE_COLOR} />
 
           {getWalkingDistance(selected) > 0 ? (
-            <View className="mx-4 mt-3 flex-row gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3">
+            <View className="mx-4 mt-3 flex-row gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5">
               <Ionicons name="warning-outline" size={18} color={colors.warning} />
-              <Text className="flex-1 text-xs leading-5 text-amber-900">
-                Los recorridos a pie son orientativos y podrían no reflejar todas las veredas,
-                cruces o condiciones del camino. Verifica tu entorno durante el viaje.
+              <Text className="flex-1 text-sm leading-5 text-amber-900">
+                Caminata orientativa: verifica cruces y condiciones del entorno.
               </Text>
             </View>
           ) : null}

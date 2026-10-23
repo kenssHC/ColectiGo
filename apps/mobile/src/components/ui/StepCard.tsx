@@ -49,6 +49,40 @@ const STEP_CONFIG: Record<
   },
 };
 
+function normalizedText(value: string): string {
+  return value.toLocaleLowerCase('es').replace(/\s+/g, '');
+}
+
+function instructionIncludes(instruction: string, value: string): boolean {
+  return normalizedText(instruction).includes(normalizedText(value));
+}
+
+function getStepAccessibilityLabel(step: RouteStep, index: number): string {
+  const details: string[] = [`Paso ${index + 1}`, step.instruction];
+
+  if (
+    step.distance !== undefined &&
+    !instructionIncludes(step.instruction, `${Math.round(step.distance)}m`) &&
+    !instructionIncludes(step.instruction, formatDistance(step.distance))
+  ) {
+    details.push(`Distancia ${formatDistance(step.distance)}`);
+  }
+  if (
+    step.duration !== undefined &&
+    !instructionIncludes(step.instruction, formatDuration(step.duration))
+  ) {
+    details.push(`Duración ${formatDuration(step.duration)}`);
+  }
+  if (
+    step.fare !== undefined &&
+    !instructionIncludes(step.instruction, `S/ ${step.fare.toFixed(2)}`)
+  ) {
+    details.push(`Tarifa S/ ${step.fare.toFixed(2)}`);
+  }
+
+  return details.join('. ');
+}
+
 export function StepCard({ step, index, isLast }: StepCardProps): ReactElement {
   const config = STEP_CONFIG[step.type];
   const vehicle = getVehiclePresentation(step.vehicleType);
@@ -56,7 +90,7 @@ export function StepCard({ step, index, isLast }: StepCardProps): ReactElement {
 
   return (
     <View className="flex-row gap-3">
-      <View className="items-center">
+      <View className="items-center" importantForAccessibility="no-hide-descendants">
         <View
           className={`w-9 h-9 rounded-full items-center justify-center border ${config.bgColor} ${config.borderColor}`}
         >
@@ -66,7 +100,10 @@ export function StepCard({ step, index, isLast }: StepCardProps): ReactElement {
       </View>
 
       <View className={`flex-1 pb-4 ${isLast ? '' : ''}`}>
-        <View className="flex-row items-center gap-2 mb-1">
+        <View
+          className="flex-row items-center gap-2 mb-1"
+          importantForAccessibility="no-hide-descendants"
+        >
           <View className="w-5 h-5 rounded-full bg-gray-100 items-center justify-center">
             <Text className="text-xs font-bold text-gray-500">{index + 1}</Text>
           </View>
@@ -80,7 +117,7 @@ export function StepCard({ step, index, isLast }: StepCardProps): ReactElement {
             </View>
           ) : null}
           {step.routeName ? (
-            <Text className="text-xs text-slate-600 flex-1" numberOfLines={1}>
+            <Text className="text-sm leading-5 text-slate-600 flex-1">
               {step.routeName}
             </Text>
           ) : null}
@@ -90,21 +127,21 @@ export function StepCard({ step, index, isLast }: StepCardProps): ReactElement {
           <View
             className="flex-1"
             accessible
-            accessibilityLabel={`Paso ${index + 1}. ${step.instruction}. ${step.duration !== undefined ? formatDuration(step.duration) : ''}`}
+            accessibilityLabel={getStepAccessibilityLabel(step, index)}
           >
             <Text className="text-sm font-medium text-slate-800 leading-5">
               {step.instruction}
             </Text>
 
-            <View className="flex-row gap-3 mt-1.5">
+            <View className="flex-row flex-wrap gap-x-3 gap-y-1 mt-1.5">
               {step.distance !== undefined ? (
-                <Text className="text-xs text-slate-600">{formatDistance(step.distance)}</Text>
+                <Text className="text-sm text-slate-600">{formatDistance(step.distance)}</Text>
               ) : null}
               {step.duration !== undefined ? (
-                <Text className="text-xs text-slate-600">{formatDuration(step.duration)}</Text>
+                <Text className="text-sm text-slate-600">{formatDuration(step.duration)}</Text>
               ) : null}
               {step.fare !== undefined ? (
-                <Text className="text-xs font-semibold text-green-800">
+                <Text className="text-sm font-semibold text-green-800">
                   S/ {step.fare.toFixed(2)}
                 </Text>
               ) : null}
