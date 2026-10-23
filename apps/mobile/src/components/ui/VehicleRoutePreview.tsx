@@ -10,14 +10,19 @@ import {
 } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import type { PlannerResult, RouteStep } from '@collectigo/shared';
+import type { PlannerResult, RouteStep, VehicleType } from '@collectigo/shared';
 import { colors } from '../../theme/tokens';
+import { getVehiclePresentation } from '../../utils/vehicle-presentation';
 
-interface VehicleReference {
-  key: string;
+export interface VehicleReference {
   routeName: string;
   routeColor?: string;
   vehicleImageUrl?: string | null;
+  vehicleType?: VehicleType;
+}
+
+interface RouteVehicleReference extends VehicleReference {
+  key: string;
 }
 
 interface VehicleThumbnailProps {
@@ -35,7 +40,7 @@ function safeImageUrl(imageUrl: string | null | undefined): string | null {
   return trimmed && /^https:\/\/\S+$/i.test(trimmed) ? trimmed : null;
 }
 
-function routeReferences(result: PlannerResult): VehicleReference[] {
+function routeReferences(result: PlannerResult): RouteVehicleReference[] {
   const boardSteps = result.steps.filter(
     (step): step is RouteStep & { routeName: string } =>
       step.type === 'board' && Boolean(step.routeName),
@@ -45,6 +50,7 @@ function routeReferences(result: PlannerResult): VehicleReference[] {
     key: `${step.routeId ?? step.routeName}-${index}`,
     routeName: step.routeName,
     routeColor: step.routeColor,
+    vehicleType: step.vehicleType,
     vehicleImageUrl:
       step.vehicleImageUrl ?? (boardSteps.length === 1 ? result.vehicleImageUrl : null),
   }));
@@ -52,6 +58,7 @@ function routeReferences(result: PlannerResult): VehicleReference[] {
 
 function VehicleThumbnail({ reference, size, onExpand }: VehicleThumbnailProps): ReactElement {
   const imageUrl = safeImageUrl(reference.vehicleImageUrl);
+  const vehicle = getVehiclePresentation(reference.vehicleType);
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(Boolean(imageUrl));
 
@@ -115,9 +122,13 @@ function VehicleThumbnail({ reference, size, onExpand }: VehicleThumbnailProps):
       ) : (
         <View
           className="flex-1 items-center justify-center"
-          accessibilityLabel={`Ruta ${reference.routeName}, sin foto referencial`}
+          accessibilityLabel={`${vehicle.label} de la ruta ${reference.routeName}, sin foto referencial`}
         >
-          <Ionicons name="bus-outline" size={size >= 48 ? 22 : 18} color={colors.textSecondary} />
+          <Ionicons
+            name={vehicle.icon}
+            size={size >= 48 ? 22 : 18}
+            color={colors.textSecondary}
+          />
           <Text className="mt-0.5 px-0.5 text-[9px] font-bold text-slate-700" numberOfLines={1}>
             {reference.routeName}
           </Text>
@@ -134,8 +145,9 @@ interface VehicleImageModalProps {
 
 function VehicleImageModal({ reference, onClose }: VehicleImageModalProps): ReactElement {
   const imageUrl = safeImageUrl(reference.vehicleImageUrl);
+  const vehicle = getVehiclePresentation(reference.vehicleType);
   const [hasError, setHasError] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(Boolean(imageUrl));
 
   return (
     <Modal
@@ -207,7 +219,7 @@ function VehicleImageModal({ reference, onClose }: VehicleImageModalProps): Reac
               </>
             ) : (
               <View className="items-center px-6">
-                <Ionicons name="image-outline" size={44} color={colors.textMuted} />
+                <Ionicons name={vehicle.icon} size={44} color={colors.textMuted} />
                 <Text className="mt-3 text-center text-sm font-semibold text-slate-200">
                   No se pudo cargar esta fotografía
                 </Text>
@@ -227,9 +239,31 @@ function VehicleImageModal({ reference, onClose }: VehicleImageModalProps): Reac
   );
 }
 
+export function VehicleReferenceImage({
+  reference,
+  size,
+}: {
+  reference: VehicleReference;
+  size: number;
+}): ReactElement {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <>
+      <VehicleThumbnail
+        reference={reference}
+        size={size}
+        onExpand={() => setIsExpanded(true)}
+      />
+      {isExpanded ? (
+        <VehicleImageModal reference={reference} onClose={() => setIsExpanded(false)} />
+      ) : null}
+    </>
+  );
+}
+
 export function VehicleRoutePreview({ result }: { result: PlannerResult }): ReactElement {
   const references = routeReferences(result).slice(0, 2);
-  const [expandedReference, setExpandedReference] = useState<VehicleReference | null>(null);
 
   if (references.length === 0) {
     return (
@@ -252,21 +286,10 @@ export function VehicleRoutePreview({ result }: { result: PlannerResult }): Reac
             {index > 0 ? (
               <Ionicons name="arrow-forward" size={13} color={colors.textMuted} />
             ) : null}
-            <VehicleThumbnail
-              reference={reference}
-              size={size}
-              onExpand={setExpandedReference}
-            />
+            <VehicleReferenceImage reference={reference} size={size} />
           </View>
         ))}
       </View>
-
-      {expandedReference ? (
-        <VehicleImageModal
-          reference={expandedReference}
-          onClose={() => setExpandedReference(null)}
-        />
-      ) : null}
     </>
   );
 }

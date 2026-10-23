@@ -7,7 +7,7 @@ La primera versión utilizará esta combinación:
 | Componente      | Proveedor y ubicación                            |       Costo inicial estimado |
 | --------------- | ------------------------------------------------ | ---------------------------: |
 | API NestJS      | Cloud Run, Santiago (`southamerica-west1`)       | USD 0–5/mes con poco tráfico |
-| PostgreSQL      | Cloud SQL, Santiago, `db-f1-micro`, 10 GB SSD    |    USD 11–13/mes más backups |
+| PostgreSQL      | Cloud SQL PostgreSQL 18, Santiago, Free Trial    | Según condiciones de la prueba |
 | Correo          | Resend; envío desde São Paulo si está disponible |           USD 0 inicialmente |
 | Páginas legales | Firebase Hosting, CDN global                     |           USD 0 inicialmente |
 | Dominio y DNS   | Cloudflare Registrar/DNS, según disponibilidad   |          Pago anual variable |
@@ -49,8 +49,7 @@ Proxy, pero no debe tener redes autorizadas abiertas.
 
 Esta sección es manual y se realiza una sola vez.
 
-1. Crear o elegir un proyecto de Google Cloud y habilitar facturación. El ID del
-   proyecto no debe contener datos personales innecesarios.
+1. Usar el proyecto existente `colectigo-5b859` y confirmar su facturación.
 2. Proteger la cuenta principal con autenticación multifactor y añadir un método
    de recuperación.
 3. En **Billing > Budgets & alerts**, crear un presupuesto mensual de USD 35 con
@@ -60,98 +59,96 @@ Esta sección es manual y se realiza una sola vez.
 ```powershell
 gcloud auth login
 gcloud auth application-default login
-gcloud config set project TU_PROJECT_ID
+gcloud config set project colectigo-5b859
 gcloud config set run/region southamerica-west1
 
-gcloud services enable run.googleapis.com sqladmin.googleapis.com `
-  cloudbuild.googleapis.com artifactregistry.googleapis.com `
-  secretmanager.googleapis.com routes.googleapis.com
+gcloud services list --enabled `
+  --project colectigo-5b859 `
+  --filter 'name:(run.googleapis.com OR sqladmin.googleapis.com OR cloudbuild.googleapis.com OR artifactregistry.googleapis.com OR secretmanager.googleapis.com OR routes.googleapis.com)'
 ```
 
 5. Usar las variables siguientes en cada nueva terminal. Sustituir el ID:
 
 ```powershell
-$projectId = 'TU_PROJECT_ID'
+$projectId = 'colectigo-5b859'
 $region = 'southamerica-west1'
 $repository = 'collectigo'
-$serviceAccount = "collectigo-run@$projectId.iam.gserviceaccount.com"
+$serviceAccount = 'collectigo-cloud-run@colectigo-5b859.iam.gserviceaccount.com'
+
+$databasePasswordSecretId = 'collectigo-db-password'
+$databasePasswordSecretVersion = '1'
+$firebasePrivateKeySecretId = 'REPLACE_WITH_FIREBASE_PRIVATE_KEY_SECRET_ID'
+$firebasePrivateKeySecretVersion = 'REPLACE_WITH_FIREBASE_PRIVATE_KEY_SECRET_VERSION'
+$googleRoutesSecretId = 'collectigo-google-routes-api-key'
+$googleRoutesSecretVersion = '1'
+$resendApiKeySecretId = 'collectigo-resend-api-key'
+$resendApiKeySecretVersion = '1'
 ```
 
 ## 2. Artifact Registry y cuenta de servicio
 
-Crear el repositorio privado de imágenes y una identidad exclusiva para la API:
+El repositorio privado y la cuenta de servicio ya existen. No recrearlos.
+Verificar que los identificadores anteriores correspondan a los recursos reales:
 
 ```powershell
-gcloud artifacts repositories create $repository `
-  --repository-format docker `
+gcloud artifacts repositories describe $repository `
+  --project $projectId `
   --location $region `
-  --description 'Imágenes de producción de ColectiGO'
+  --format 'value(name)'
 
-gcloud iam service-accounts create collectigo-run `
-  --display-name 'ColectiGO Cloud Run'
-
-gcloud projects add-iam-policy-binding $projectId `
-  --member "serviceAccount:$serviceAccount" `
-  --role roles/cloudsql.client
-
-gcloud projects add-iam-policy-binding $projectId `
-  --member "serviceAccount:$serviceAccount" `
-  --role roles/secretmanager.secretAccessor
-
-gcloud projects add-iam-policy-binding $projectId `
-  --member "serviceAccount:$serviceAccount" `
-  --role roles/logging.logWriter
+gcloud iam service-accounts describe $serviceAccount `
+  --project $projectId `
+  --format 'value(email)'
 ```
 
-El acceso a Secret Manager se concede inicialmente a nivel del proyecto para
-simplificar el alta. Cuando el despliegue esté estable, puede reducirse a los
-cuatro secretos concretos.
+La cuenta ya tiene `roles/cloudsql.client` y
+`roles/secretmanager.secretAccessor`. Antes del despliegue solo debe verificarse
+que el acceso a Secret Manager cubra los cuatro secretos reales utilizados; no
+se necesita crear otra identidad ni conceder `roles/logging.logWriter`.
 
 ## 3. Cloud SQL en Santiago
 
-Crear la base desde **Google Cloud Console > SQL > Create instance > PostgreSQL**
-para evitar guardar la contraseña en el historial de PowerShell:
+La instancia y la base ya existen. Conservar esta configuración real:
 
-1. ID de instancia: `collectigo-db`.
-2. PostgreSQL 15, para coincidir con el entorno local actual.
-3. Región: `southamerica-west1`; disponibilidad: **Single zone**.
-4. Edición Enterprise, CPU compartida `db-f1-micro`.
-5. SSD de 10 GB y crecimiento automático habilitado.
-6. Backups automáticos, recuperación a un punto en el tiempo y protección contra
-   eliminación habilitados.
+1. ID de instancia: `collectigo-postgres`.
+2. PostgreSQL 18.
+3. Región: `southamerica-west1`.
+4. Base: `collectigo`.
+5. Usuario: `collectigo_app`.
+6. La base está vacía antes de la primera migración productiva.
 7. No añadir redes autorizadas (`0.0.0.0/0` nunca debe utilizarse).
-8. Crear la base `collectigo` y el usuario `collectigo`.
-9. Generar una contraseña larga y única, y guardarla en el gestor de
-   contraseñas. No reutilizar la contraseña local `postgres`.
 
 El servicio usa `DATABASE_POOL_SIZE=4`. Con `max-instances=3`, la API abre como
 máximo unas 12 conexiones PostgreSQL, dejando margen para migraciones,
 administración y tareas internas de Cloud SQL. No aumentar el pool ni el número
 de instancias sin revisar conjuntamente el límite de conexiones y la capacidad
-de `db-f1-micro`.
+real asignada a la instancia durante y después del Free Trial.
 
 Obtener después el nombre de conexión:
 
 ```powershell
-$connectionName = gcloud sql instances describe collectigo-db `
+$connectionName = gcloud sql instances describe collectigo-postgres `
+  --project $projectId `
   --format 'value(connectionName)'
 $connectionName
 ```
 
 El resultado debe tener esta forma:
-`TU_PROJECT_ID:southamerica-west1:collectigo-db`.
+`colectigo-5b859:southamerica-west1:collectigo-postgres`.
 
 ## 4. Secret Manager
 
-Desde **Security > Secret Manager**, crear estos secretos y añadir su valor como
-primera versión:
+Desde **Security > Secret Manager**, se confirmaron tres secretos existentes con
+versión `1`. Falta el secreto que entregue `FIREBASE_PRIVATE_KEY`; no desplegar
+la API hasta crearlo o adaptar expresamente la autenticación a credenciales
+predeterminadas de Google Cloud:
 
 | Secreto                            | Contenido                                      |
 | ---------------------------------- | ---------------------------------------------- |
-| `collectigo-db-password`           | Contraseña del usuario PostgreSQL `collectigo` |
-| `collectigo-firebase-private-key`  | Clave privada completa de Firebase Admin       |
-| `collectigo-google-routes-api-key` | Key server-side restringida a Routes API       |
-| `collectigo-resend-api-key`        | API key SMTP exclusiva de producción           |
+| `collectigo-db-password:1`              | Contraseña del usuario PostgreSQL `collectigo_app` |
+| Pendiente                               | Clave privada completa de Firebase Admin       |
+| `collectigo-google-routes-api-key:1`    | Key server-side restringida a Routes API       |
+| `collectigo-resend-api-key:1`           | API key SMTP de Resend                         |
 
 No añadir estos valores a `.env.example`, al YAML de despliegue, a GitHub
 Actions ni a comandos que queden guardados en el historial.
@@ -159,8 +156,8 @@ Actions ni a comandos que queden guardados en el historial.
 ## 5. Google Routes
 
 1. En **APIs & Services**, confirmar que **Routes API** está habilitada.
-2. Crear una API key exclusiva para el backend. No reutilizar la clave Android
-   de Maps SDK incluida en el APK.
+2. Confirmar que `collectigo-google-routes-api-key:1` contiene una API key
+   exclusiva para el backend. No reutilizar la clave Android de Maps SDK.
 3. En **API restrictions**, permitir únicamente **Routes API**.
 4. Cloud Run no ofrece una IP de salida fija por defecto. En esta fase no usar
    restricción por IP: conservar la key en Secret Manager y controlar el riesgo
@@ -181,14 +178,15 @@ hay resultados inválidos.
 
 ## 6. Resend y correo
 
-1. Crear la cuenta, activar MFA y añadir `mail.tudominio` en **Domains**.
+1. En la cuenta existente, activar MFA y, antes de producción, añadir un dominio
+   propio en **Domains**.
 2. Seleccionar São Paulo como región de envío si aparece disponible.
 3. Copiar a Cloudflare los registros SPF y DKIM entregados por Resend.
 4. Esperar a que el dominio figure como verificado.
-5. Crear una API key exclusiva y almacenarla como
-   `collectigo-resend-api-key` en Secret Manager.
-6. Usar `ColectiGO <no-reply@mail.tudominio>` como remitente y el buzón dedicado
-   del proyecto como `ROUTE_SUGGESTIONS_EMAIL`.
+5. Mantener la API key existente en `collectigo-resend-api-key:1` y rotarla si
+   alguna vez fue expuesta.
+6. Usar `ColectiGO <no-reply@DOMINIO_VERIFICADO>` como remitente y el buzón
+   dedicado del proyecto como `ROUTE_SUGGESTIONS_EMAIL`.
 7. El buzón debe eliminar las sugerencias al cumplir 90 días. Hasta automatizar
    la regla, revisar y vaciar mensualmente también la papelera.
 
@@ -196,9 +194,16 @@ La región de envío no implica residencia regional del contenido: la política 
 el registro interno deben mantener documentado el tratamiento internacional del
 proveedor.
 
+Mientras no exista un dominio verificado, `onboarding@resend.dev` puede usarse
+solo para una prueba controlada de Resend. No debe considerarse un remitente de
+producción y su entrega está limitada por las reglas del dominio de pruebas. La
+dirección Gmail receptora no puede utilizarse como `SMTP_FROM` de Resend porque
+el dominio `gmail.com` no pertenece al proyecto ni puede verificarse en Resend.
+
 ## 7. Variables no secretas
 
-Crear el archivo local ignorado por Git:
+El archivo local ignorado por Git ya existe. Solo si falta, crearlo desde el
+ejemplo:
 
 ```powershell
 Copy-Item deploy/gcp/cloud-run.env.yaml.example `
@@ -221,21 +226,15 @@ configuración concreta del despliegue.
 
 ## 8. Construir la imagen
 
-Desde la raíz del repositorio:
+Desde la raíz del repositorio, usar siempre una etiqueta inmutable:
 
 ```powershell
-gcloud builds submit --config cloudbuild.yaml .
-
-$image = "${region}-docker.pkg.dev/$projectId/$repository/backend:latest"
-```
-
-`cloudbuild.yaml` usa Santiago y la etiqueta `latest` de forma predeterminada.
-En despliegues posteriores conviene utilizar una etiqueta inmutable:
-
-```powershell
-$tag = Get-Date -Format 'yyyyMMdd-HHmmss'
-gcloud builds submit --config cloudbuild.yaml `
-  --substitutions "_TAG=$tag" .
+$tag = "$(git rev-parse --short=12 HEAD)-$(Get-Date -Format 'yyyyMMddHHmmss')"
+gcloud builds submit . `
+  --project $projectId `
+  --region $region `
+  --config cloudbuild.yaml `
+  --substitutions "_REGION=$region,_REPOSITORY=$repository,_IMAGE=backend,_TAG=$tag"
 $image = "${region}-docker.pkg.dev/$projectId/$repository/backend:$tag"
 ```
 
@@ -255,11 +254,11 @@ gcloud run jobs deploy collectigo-migrate `
   --service-account $serviceAccount `
   --set-cloudsql-instances $connectionName `
   --env-vars-file deploy/gcp/cloud-run.env.yaml `
-  --set-secrets 'DATABASE_PASSWORD=collectigo-db-password:latest' `
+  --set-secrets "DATABASE_PASSWORD=${databasePasswordSecretId}:${databasePasswordSecretVersion}" `
   --command node `
   --args apps/backend/dist/migrate.js `
   --tasks 1 `
-  --max-retries 1 `
+  --max-retries 0 `
   --task-timeout 10m
 
 gcloud run jobs execute collectigo-migrate --region $region --wait
@@ -281,7 +280,7 @@ gcloud run deploy collectigo-api `
   --service-account $serviceAccount `
   --set-cloudsql-instances $connectionName `
   --env-vars-file deploy/gcp/cloud-run.env.yaml `
-  --set-secrets 'DATABASE_PASSWORD=collectigo-db-password:latest,FIREBASE_PRIVATE_KEY=collectigo-firebase-private-key:latest,GOOGLE_ROUTES_API_KEY=collectigo-google-routes-api-key:latest,SMTP_PASSWORD=collectigo-resend-api-key:latest' `
+  --set-secrets "DATABASE_PASSWORD=${databasePasswordSecretId}:${databasePasswordSecretVersion},FIREBASE_PRIVATE_KEY=${firebasePrivateKeySecretId}:${firebasePrivateKeySecretVersion},GOOGLE_ROUTES_API_KEY=${googleRoutesSecretId}:${googleRoutesSecretVersion},SMTP_PASSWORD=${resendApiKeySecretId}:${resendApiKeySecretVersion}" `
   --allow-unauthenticated `
   --ingress all `
   --cpu 1 `
@@ -328,11 +327,11 @@ cloud-sql-proxy.exe --port 5433 $connectionName
 3. En otra terminal, desde la raíz del proyecto:
 
 ```powershell
-$secureDbPassword = Read-Host 'Contraseña de collectigo' -AsSecureString
+$secureDbPassword = Read-Host 'Contraseña de collectigo_app' -AsSecureString
 $env:DATABASE_PASSWORD = [Net.NetworkCredential]::new('', $secureDbPassword).Password
 $env:DATABASE_HOST = '127.0.0.1'
 $env:DATABASE_PORT = '5433'
-$env:DATABASE_USER = 'collectigo'
+$env:DATABASE_USER = 'collectigo_app'
 $env:DATABASE_NAME = 'collectigo'
 $env:DATABASE_SSL = 'false'
 

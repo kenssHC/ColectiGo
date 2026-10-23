@@ -285,7 +285,7 @@ export default function LoginScreen(): ReactElement {
                 </Text>
               </TouchableOpacity>
 
-              <LegalLinks context="login" />
+              <LegalLinks context="login" compact />
             </View>
           </View>
         </ScrollView>

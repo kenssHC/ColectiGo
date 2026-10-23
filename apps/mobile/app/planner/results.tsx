@@ -12,6 +12,10 @@ import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
 import { ScreenState } from '../../src/components/ui/ScreenState';
 import { ResultMap } from '../../src/components/map/ResultMap';
 import { formatDistance, formatDuration } from '../../src/utils/format';
+import {
+  getDurationComparisonMessage,
+  getTrafficImpactMessage,
+} from '../../src/utils/planner-insights';
 import { colors } from '../../src/theme/tokens';
 
 const BADGE_LABEL: Record<PlannerBadge, string> = {
@@ -128,10 +132,18 @@ function OptionRow({ option, isSelected, isBest, onPress }: OptionRowProps): Rea
   );
 }
 
-function SummaryCard({ result }: { result: PlannerResult }): ReactElement {
+function SummaryCard({
+  result,
+  options,
+}: {
+  result: PlannerResult;
+  options: PlannerResult[];
+}): ReactElement {
   const transfers = getTransferCount(result);
   const walkingDistance = getWalkingDistance(result);
   const timeSource = getTimeSource(result);
+  const durationComparison = getDurationComparisonMessage(result, options);
+  const trafficImpact = getTrafficImpactMessage(result);
 
   return (
     <View className="mx-4 my-3 bg-white rounded-2xl border border-slate-200 overflow-hidden">
@@ -170,6 +182,25 @@ function SummaryCard({ result }: { result: PlannerResult }): ReactElement {
         </View>
 
         <View className="h-px bg-slate-200" />
+
+        {durationComparison || trafficImpact ? (
+          <View className="gap-2">
+            {durationComparison ? (
+              <View className="flex-row gap-2 rounded-xl bg-blue-50 px-3 py-2.5">
+                <Ionicons name="time-outline" size={17} color={colors.primary} />
+                <Text className="flex-1 text-sm leading-5 text-blue-900">
+                  {durationComparison}
+                </Text>
+              </View>
+            ) : null}
+            {trafficImpact ? (
+              <View className="flex-row gap-2 rounded-xl bg-slate-100 px-3 py-2.5">
+                <Ionicons name="car-outline" size={17} color={colors.textSecondary} />
+                <Text className="flex-1 text-xs leading-5 text-slate-700">{trafficImpact}</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
 
         <View className="flex-row flex-wrap gap-x-4 gap-y-2">
           <View className="flex-row items-center gap-1.5">
@@ -270,7 +301,7 @@ export default function ResultsScreen(): ReactElement | null {
             </View>
           ) : null}
 
-          <SummaryCard result={selected} />
+          <SummaryCard result={selected} options={options} />
 
           <View className="px-4 pb-2 pt-2">
             <Text className="text-sm font-bold text-slate-800 mb-3">Paso a paso</Text>

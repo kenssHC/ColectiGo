@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import type { RouteStep } from '@collectigo/shared';
 import { formatDistance, formatDuration } from '../../utils/format';
 import { colors } from '../../theme/tokens';
+import { getVehiclePresentation } from '../../utils/vehicle-presentation';
+import { VehicleReferenceImage } from './VehicleRoutePreview';
 
 interface StepCardProps {
   step: RouteStep;
@@ -47,27 +49,18 @@ const STEP_CONFIG: Record<
   },
 };
 
-const VEHICLE_LABEL: Record<string, string> = {
-  colectivo: 'Colectivo',
-  auto: 'Auto',
-  combi: 'Combi',
-  bus: 'Bus',
-};
-
 export function StepCard({ step, index, isLast }: StepCardProps): ReactElement {
   const config = STEP_CONFIG[step.type];
+  const vehicle = getVehiclePresentation(step.vehicleType);
+  const stepIcon = step.type === 'board' ? vehicle.icon : config.icon;
 
   return (
-    <View
-      className="flex-row gap-3"
-      accessible
-      accessibilityLabel={`Paso ${index + 1}. ${step.instruction}. ${step.duration !== undefined ? formatDuration(step.duration) : ''}`}
-    >
+    <View className="flex-row gap-3">
       <View className="items-center">
         <View
           className={`w-9 h-9 rounded-full items-center justify-center border ${config.bgColor} ${config.borderColor}`}
         >
-          <Ionicons name={config.icon} size={18} color={config.iconColor} />
+          <Ionicons name={stepIcon} size={18} color={config.iconColor} />
         </View>
         {!isLast ? <View className="w-0.5 flex-1 bg-gray-200 mt-1" /> : null}
       </View>
@@ -82,7 +75,7 @@ export function StepCard({ step, index, isLast }: StepCardProps): ReactElement {
               className={`px-2 py-0.5 rounded-full ${config.bgColor} border ${config.borderColor}`}
             >
               <Text className="text-xs font-medium" style={{ color: config.iconColor }}>
-                {VEHICLE_LABEL[step.vehicleType] ?? step.vehicleType}
+                {vehicle.label}
               </Text>
             </View>
           ) : null}
@@ -93,17 +86,41 @@ export function StepCard({ step, index, isLast }: StepCardProps): ReactElement {
           ) : null}
         </View>
 
-        <Text className="text-sm font-medium text-slate-800 leading-5">{step.instruction}</Text>
+        <View className="flex-row gap-3">
+          <View
+            className="flex-1"
+            accessible
+            accessibilityLabel={`Paso ${index + 1}. ${step.instruction}. ${step.duration !== undefined ? formatDuration(step.duration) : ''}`}
+          >
+            <Text className="text-sm font-medium text-slate-800 leading-5">
+              {step.instruction}
+            </Text>
 
-        <View className="flex-row gap-3 mt-1.5">
-          {step.distance !== undefined ? (
-            <Text className="text-xs text-slate-600">{formatDistance(step.distance)}</Text>
-          ) : null}
-          {step.duration !== undefined ? (
-            <Text className="text-xs text-slate-600">{formatDuration(step.duration)}</Text>
-          ) : null}
-          {step.fare !== undefined ? (
-            <Text className="text-xs font-semibold text-green-800">S/ {step.fare.toFixed(2)}</Text>
+            <View className="flex-row gap-3 mt-1.5">
+              {step.distance !== undefined ? (
+                <Text className="text-xs text-slate-600">{formatDistance(step.distance)}</Text>
+              ) : null}
+              {step.duration !== undefined ? (
+                <Text className="text-xs text-slate-600">{formatDuration(step.duration)}</Text>
+              ) : null}
+              {step.fare !== undefined ? (
+                <Text className="text-xs font-semibold text-green-800">
+                  S/ {step.fare.toFixed(2)}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+
+          {step.type === 'board' ? (
+            <VehicleReferenceImage
+              reference={{
+                routeName: step.routeName ?? 'Ruta',
+                routeColor: step.routeColor,
+                vehicleImageUrl: step.vehicleImageUrl,
+                vehicleType: step.vehicleType,
+              }}
+              size={58}
+            />
           ) : null}
         </View>
       </View>
