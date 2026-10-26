@@ -41,6 +41,8 @@ function validateProductionLegalConfig() {
 module.exports = ({ config }) => {
   validateProductionLegalConfig();
   const googleMapsApiKey = process.env.GOOGLE_MAPS_API_KEY ?? '';
+  const googleServicesFile =
+    process.env.GOOGLE_SERVICES_JSON?.trim() || './google-services.json';
   const googleIosUrlScheme = process.env.GOOGLE_IOS_URL_SCHEME?.trim() ?? '';
 
   if (!googleMapsApiKey) {
@@ -53,6 +55,10 @@ module.exports = ({ config }) => {
 
   return {
     ...config,
+    android: {
+      ...config.android,
+      googleServicesFile,
+    },
     plugins: [
       ...(config.plugins ?? []),
       ...(googleIosUrlScheme
